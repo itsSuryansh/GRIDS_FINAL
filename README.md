@@ -571,7 +571,22 @@ basemap before the run starts; controls, KPIs and diagnostics are all live.*
 
 ---
 
-## 10. Local development
+## 10. Deployment
+
+See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** for the full guide: running
+locally (dev server, single port, Docker), publishing the dashboard on Vercel, and
+putting the stateful API on a host that keeps a process, a WebSocket and a disk
+alive. Short version:
+
+* **Frontend → Vercel** (static Vite bundle; `vercel.json` is already configured —
+  replace the `/api` rewrite target with your backend URL).
+* **Backend → a container host** (Render / Railway / Fly.io / VPS) with a
+  persistent volume, because a simulation run is an in-process task streaming over
+  a WebSocket.
+
+---
+
+## 11. Local development
 
 Requirements: Python 3.11+, Node 18+.
 
@@ -605,7 +620,7 @@ python scripts/run_scenarios.py --duration 120 --seed 42 --persist
 
 ---
 
-## 11. Docker execution
+## 12. Docker execution
 
 ```bash
 cp .env.example .env
@@ -622,7 +637,7 @@ docker compose down          # add -v to drop the SQLite volume
 
 ---
 
-## 12. Testing
+## 13. Testing
 
 ```bash
 cd backend
@@ -677,7 +692,7 @@ All tests use deterministic seeds and a temporary SQLite database.
 
 ---
 
-## 13. Known limitations
+## 14. Known limitations
 
 1. **Simulated data only.** No receiver, IMU or CAN data is ingested; the physics
    is a kinematic model with noise and bias, not a hardware model.
@@ -710,7 +725,7 @@ All tests use deterministic seeds and a temporary SQLite database.
 
 ---
 
-## 14. Future improvements
+## 15. Future improvements
 
 * Tight coupling with raw GNSS measurements and RAIM-style satellite-level checks.
 * IMM/UKF variants for aggressive manoeuvres; 3-D state with a barometer.
@@ -723,7 +738,7 @@ All tests use deterministic seeds and a temporary SQLite database.
 
 ---
 
-## 15. Repository layout
+## 16. Repository layout
 
 ```
 grids/

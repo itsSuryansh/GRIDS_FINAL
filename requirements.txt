@@ -1,0 +1,3 @@
+# Convenience manifest: lets a host that insists on a repository-root
+# requirements.txt (e.g. Vercel's Python runtime) reuse the backend's list.
+-r backend/requirements.txt

@@ -40,8 +40,14 @@ class Settings:
             if o.strip()
         ]
         # Vite proxy hosts (e2b preview) are allowed through regex below.
+        # Hosted frontends: preview sandboxes, Vercel, and the common container
+        # hosts people put this backend on. Override with GRIDS_CORS_ORIGIN_REGEX
+        # (or set GRIDS_CORS_ORIGINS to an exact list) for a locked-down deploy.
         self.cors_origin_regex: str = os.getenv(
-            "GRIDS_CORS_ORIGIN_REGEX", r"https?://([a-zA-Z0-9\-\.]+)?(e2b\.app|localhost|127\.0\.0\.1)(:\d+)?"
+            "GRIDS_CORS_ORIGIN_REGEX",
+            r"https?://([a-zA-Z0-9\-\.]+)?"
+            r"(e2b\.app|vercel\.app|netlify\.app|onrender\.com|fly\.dev|up\.railway\.app"
+            r"|localhost|127\.0\.0\.1)(:\d+)?",
         )
 
         # --- simulation defaults ---

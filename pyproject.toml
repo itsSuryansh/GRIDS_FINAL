@@ -1,0 +1,5 @@
+[project]
+name = "grids"
+version = "1.0.0"
+description = "GRIDS - GNSS-Resilient Intelligent Dead Reckoning System"
+requires-python = ">=3.12"
