@@ -51,19 +51,17 @@ export default function TopBar({
         >
           <PanelLeftClose size={15} className={sidebarOpen ? '' : 'rotate-180'} />
         </button>
-        {/* brand lockup: mark + wordmark + descriptor, one shared baseline grid */}
+        {/* brand lockup: satellite-globe symbol + heavy wordmark + descriptor */}
         <img
-          src="/grids-mark.svg"
+          src="/grids-symbol.svg"
           alt="GRIDS"
-          width={30}
-          height={30}
-          className="rounded-[9px] shrink-0 shadow-[0_1px_2px_rgba(15,23,42,0.22),0_6px_14px_-10px_rgba(15,23,42,0.5)]"
+          width={38}
+          height={24}
+          className="shrink-0 -ml-0.5"
         />
         <div className="min-w-0">
-          <div className="flex items-baseline gap-[7px] leading-none">
-            <span className="text-[15px] font-extrabold tracking-[0.12em] text-slate-900 leading-none">
-              GRIDS
-            </span>
+          <div className="flex items-baseline gap-[9px] leading-none">
+            <span className="brand-wordmark text-[16px] leading-none">GRIDS</span>
             <span className="hidden xl:inline text-[8.5px] font-bold uppercase tracking-[0.15em] text-blue-600/80 leading-none">
               resilient positioning
             </span>

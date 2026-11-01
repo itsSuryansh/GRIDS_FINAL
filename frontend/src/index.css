@@ -1,4 +1,15 @@
 @import '@fontsource-variable/inter';
+
+/* Brand wordmark face: Archivo Black, subset to the glyphs the logo needs
+   (uppercase, space, hyphen) -- 3.8 kB WOFF2, self-hosted so it works offline.
+   Archivo Black is licensed under the SIL Open Font License 1.1. */
+@font-face {
+  font-family: 'Archivo Black';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./assets/archivo-black-subset.woff2') format('woff2');
+}
 @import '@fontsource-variable/jetbrains-mono';
 
 @tailwind base;
@@ -35,6 +46,13 @@ body {
 .scroll-quiet { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
 
 @layer components {
+  /* brand wordmark: heavy, slightly condensed feel via tight tracking */
+  .brand-wordmark {
+    font-family: theme('fontFamily.brand');
+    letter-spacing: -0.005em;
+    line-height: 1;
+    color: #0d2a4d;
+  }
   .panel {
     @apply bg-white border border-slate-200/90 rounded-xl shadow-panel overflow-hidden;
   }
