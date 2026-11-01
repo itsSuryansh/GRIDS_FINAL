@@ -51,15 +51,24 @@ export default function TopBar({
         >
           <PanelLeftClose size={15} className={sidebarOpen ? '' : 'rotate-180'} />
         </button>
-        <img src="/grids-mark.svg" alt="GRIDS" width={30} height={30} className="rounded-lg shadow-[0_1px_2px_rgba(15,23,42,0.18)]" />
+        {/* brand lockup: mark + wordmark + descriptor, one shared baseline grid */}
+        <img
+          src="/grids-mark.svg"
+          alt="GRIDS"
+          width={30}
+          height={30}
+          className="rounded-[9px] shrink-0 shadow-[0_1px_2px_rgba(15,23,42,0.22),0_6px_14px_-10px_rgba(15,23,42,0.5)]"
+        />
         <div className="min-w-0">
-          <div className="flex items-baseline gap-2">
-            <span className="text-[14.5px] font-extrabold tracking-[0.16em] text-slate-900 leading-none">GRIDS</span>
-            <span className="hidden xl:inline text-[9px] font-semibold uppercase tracking-[0.13em] text-slate-400 leading-none">
+          <div className="flex items-baseline gap-[7px] leading-none">
+            <span className="text-[15px] font-extrabold tracking-[0.12em] text-slate-900 leading-none">
+              GRIDS
+            </span>
+            <span className="hidden xl:inline text-[8.5px] font-bold uppercase tracking-[0.15em] text-blue-600/80 leading-none">
               resilient positioning
             </span>
           </div>
-          <div className="text-[9.5px] text-slate-400 mt-[3px] leading-none tracking-tight hidden sm:block">
+          <div className="text-[9.5px] text-slate-400 mt-[4px] leading-none tracking-[-0.005em] hidden sm:block">
             GNSS-Resilient Intelligent Dead Reckoning System
           </div>
         </div>

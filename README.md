@@ -18,6 +18,16 @@ dashboard, and ground-truth-scored performance analytics persisted in SQLite.
 > anti-spoofing system. These limits are stated in the API (`/api/system/info`),
 > in the analytics notes of every report, and in the UI.
 
+<img src="frontend/public/grids-mark.svg" alt="GRIDS logo" width="56" align="left" hspace="14" vspace="4" />
+
+**Logo.** A monogram *G* drawn as an orbit, with a satellite node at the top of the
+arc and the acquisition node at the foot: GNSS positioning whose loop still closes
+when the sky is blocked. The tile is a navy gradient with a 1 px sky-blue rim, so it
+holds up at 18 px in a browser tab and at 72 px on a dark surface. Source:
+`frontend/public/grids-mark.svg` (also the favicon).
+
+<br clear="left" />
+
 ![GRIDS operations dashboard](docs/images/dashboard-operations.png)
 
 *Operations view mid-outage: the vehicle follows a real Jaipur street network on a
