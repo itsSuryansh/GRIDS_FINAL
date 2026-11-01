@@ -120,6 +120,174 @@ def _arc_points(
     return np.column_stack([cx + radius * np.cos(ang), cy + radius * np.sin(ang)])
 
 
+def _resample_polyline(points: np.ndarray, spacing: float = 0.5) -> np.ndarray:
+    """Resample a polyline at (approximately) fixed spacing."""
+    pts = np.asarray(points, dtype=float)
+    if len(pts) < 2:
+        return pts
+    seg = np.linalg.norm(np.diff(pts, axis=0), axis=1)
+    keep = np.concatenate([[True], seg > 1e-9])
+    pts = pts[keep]
+    if len(pts) < 2:
+        return pts
+    seg = np.linalg.norm(np.diff(pts, axis=0), axis=1)
+    arclen = np.concatenate([[0.0], np.cumsum(seg)])
+    n_out = max(2, int(arclen[-1] / spacing) + 1)
+    s_out = np.linspace(0.0, arclen[-1], n_out)
+    return np.column_stack([
+        np.interp(s_out, arclen, pts[:, 0]),
+        np.interp(s_out, arclen, pts[:, 1]),
+    ])
+
+
+def _round_corners(points: np.ndarray, radius: float = 12.0, max_trim: float = 25.0) -> np.ndarray:
+    """Replace sharp vertices with quadratic fillets so heading stays continuous."""
+    if len(points) < 3:
+        return points
+    out = [points[0]]
+    for i in range(1, len(points) - 1):
+        p_prev, p, p_next = points[i - 1], points[i], points[i + 1]
+        v1, v2 = p_prev - p, p_next - p
+        l1, l2 = np.linalg.norm(v1), np.linalg.norm(v2)
+        if l1 < 1e-6 or l2 < 1e-6:
+            out.append(p)
+            continue
+        u1, u2 = v1 / l1, v2 / l2
+        cosang = float(np.clip(u1 @ u2, -1.0, 1.0))
+        if cosang > 0.999:                       # straight through
+            out.append(p)
+            continue
+        trim = min(radius, max_trim, 0.45 * l1, 0.45 * l2)
+        a = p + u1 * trim
+        b = p + u2 * trim
+        t = np.linspace(0.0, 1.0, max(4, int(trim)))
+        curve = ((1 - t)[:, None] ** 2) * a + 2 * ((1 - t) * t)[:, None] * p + (t[:, None] ** 2) * b
+        out.append(curve)
+    out.append(points[-1])
+    return np.vstack(out)
+
+
+def _clip_segment(
+    a: np.ndarray, b: np.ndarray, box: float
+) -> Optional[Tuple[Tuple[float, float], Tuple[float, float]]]:
+    """Liang-Barsky clip of a segment to [-box, box]^2 (returns None if outside)."""
+    dx, dy = float(b[0] - a[0]), float(b[1] - a[1])
+    t0, t1 = 0.0, 1.0
+    for p, q in ((-dx, a[0] + box), (dx, box - a[0]), (-dy, a[1] + box), (dy, box - a[1])):
+        if abs(p) < 1e-12:
+            if q < 0:
+                return None
+            continue
+        r = q / p
+        if p < 0:
+            if r > t1:
+                return None
+            t0 = max(t0, r)
+        else:
+            if r < t0:
+                return None
+            t1 = min(t1, r)
+    if t1 - t0 < 1e-9:
+        return None
+    return (
+        (a[0] + t0 * dx, a[1] + t0 * dy),
+        (a[0] + t1 * dx, a[1] + t1 * dy),
+    )
+
+
+def build_road_route(
+    ways: Sequence[Sequence[Tuple[float, float]]],
+    rng: np.random.Generator,
+    min_length_m: float = 350.0,
+    extent_m: float = 600.0,
+) -> Optional[np.ndarray]:
+    """Follow a real street graph (local EN metres).
+
+    Every way is clipped to a square window and split into individual block
+    edges, which become the edges of the road graph. A randomised walk that
+    prefers turning at junctions then produces a route that owns real street
+    geometry -- exactly what map matching and map aiding are meant to exploit.
+    Cost is linear in the number of edges and the walk is O(1) per metre.
+    """
+    box = float(extent_m)
+    key = lambda p: (round(p[0] / 1.5), round(p[1] / 1.5))     # ~1.5 m nodes
+    nodes: dict = {}
+    coords: List[np.ndarray] = []
+    adj: List[List[Tuple[int, float]]] = []
+
+    def node_id(x: float, y: float) -> int:
+        k = (round(x / 1.5), round(y / 1.5))
+        idx = nodes.get(k)
+        if idx is None:
+            idx = len(coords)
+            nodes[k] = idx
+            coords.append(np.array([x, y], dtype=float))
+            adj.append([])
+        return idx
+
+    edges = set()
+    for way in ways:
+        pts = [np.asarray(p, dtype=float) for p in way]
+        for a, b in zip(pts, pts[1:]):
+            clipped = _clip_segment(a, b, box)
+            if clipped is None:
+                continue
+            (x0, y0), (x1, y1) = clipped
+            d = math.hypot(x1 - x0, y1 - y0)
+            if d < 1.5:                     # drop sub-metre geometry clutter
+                continue
+            i, j = node_id(x0, y0), node_id(x1, y1)
+            if i == j or (min(i, j), max(i, j)) in edges:
+                continue
+            edges.add((min(i, j), max(i, j)))
+            adj[i].append((j, d))
+            adj[j].append((i, d))
+    if len(coords) < 8:
+        return None
+
+    # snap the start to the graph node closest to the origin of the run
+    start = min(range(len(coords)), key=lambda i: float(np.linalg.norm(coords[i])))
+    path_idx = [start]
+    current = start
+    came_from = -1
+    total = 0.0
+
+    def heading_of(a: int, b: int) -> float:
+        d = coords[b] - coords[a]
+        return math.atan2(d[0], d[1])
+
+    while total < min_length_m and len(path_idx) < 6000:
+        options = [(j, d) for j, d in adj[current] if j != came_from]
+        if not options:                                   # dead end
+            if len(path_idx) <= 1:
+                break
+            path_idx.pop()
+            came_from = path_idx[-1] if len(path_idx) >= 2 else -1
+            current = path_idx[-1]
+            continue
+        in_heading = heading_of(came_from, current) if came_from >= 0 else None
+        best, best_score = None, -1.0
+        for j, d in options:
+            if in_heading is None:
+                score = float(rng.random())
+            else:
+                turn = abs(wrap_angle(heading_of(current, j) - in_heading))
+                # prefer an actual turn at a junction, but allow straight on
+                pref = 1.0 if 0.2 < turn < 1.9 else 0.3
+                # prefer unvisited nodes when it does not cost much
+                score = pref * (0.4 + float(rng.random()))
+            if score > best_score:
+                best, best_score = (j, d), score
+        assert best is not None
+        j, d = best
+        path_idx.append(j)
+        total += d
+        came_from, current = current, j
+    if len(path_idx) < 3:
+        return None
+    return _round_corners(np.vstack([coords[i] for i in path_idx]))
+
+
 def build_route(
     pattern: RoutePattern,
     speed_ms: float,
@@ -127,10 +295,20 @@ def build_route(
     initial_heading_rad: float,
     rng: np.random.Generator,
     custom_points_m: Optional[Sequence[Tuple[float, float]]] = None,
+    road_vertices_m: Optional[Sequence[Sequence[Tuple[float, float]]]] = None,
 ) -> Route:
     """Create a route polyline for the requested movement pattern."""
     total = max(20.0, speed_ms * duration_s * 1.25)
     h0 = initial_heading_rad
+
+    if pattern == RoutePattern.ROAD and road_vertices_m:
+        poly = build_road_route(list(road_vertices_m), rng,
+                                min_length_m=max(total, 200.0),
+                                extent_m=600.0)
+        if poly is not None and len(poly) > 2:
+            return _finalise(_resample_polyline(poly))
+        # no street graph available -> fall through to the curved pattern
+        pattern = RoutePattern.CURVED
 
     if pattern == RoutePattern.CUSTOM and custom_points_m:
         pts = np.asarray(custom_points_m, dtype=float)
@@ -222,6 +400,38 @@ class SimStep:
     injected_fault_active: bool = False
 
 
+def _road_ways(plane: LocalTangentPlane, config: "SimulatorConfig") -> List[List[Tuple[float, float]]]:
+    """Street polylines in the local frame (OpenStreetMap when reachable)."""
+    ways: List[List[Tuple[float, float]]] = []
+    if config.use_real_map_data:
+        try:
+            from app.services.map_data_service import road_network
+
+            data = road_network(config.origin_lat, config.origin_lon, config.map_radius_m)
+            for road in data.get("roads", []):
+                pts = [plane.to_local(lat, lon) for lat, lon in road.get("points", [])]
+                pts = [(float(e), float(n)) for e, n in pts
+                       if abs(e) <= config.map_radius_m and abs(n) <= config.map_radius_m]
+                if len(pts) >= 2:
+                    ways.append(pts)
+        except Exception:                                  # pragma: no cover
+            ways = []
+    if len(ways) < 8:
+        # deterministic synthetic street lattice around the origin (offline mode):
+        # one way per block edge so every intersection is a graph node.
+        spacing = 120.0
+        extent = 600.0
+        n = int(extent / spacing)
+        ways = []
+        for i in range(-n, n):
+            for j in range(-n, n + 1):
+                y = i * spacing
+                ways.append([(j * spacing, y), ((j + 1) * spacing, y)])
+                x = j * spacing
+                ways.append([(x, i * spacing), (x, (i + 1) * spacing)])
+    return ways
+
+
 class VehicleSimulator:
     """Configurable ground-truth vehicle + sensor simulator."""
 
@@ -241,6 +451,13 @@ class VehicleSimulator:
                 self.plane.to_local(w.lat, w.lon) for w in config.custom_waypoints
             ]
 
+        # Street vertices for the road-following pattern. Real OpenStreetMap
+        # geometry is used when it can be fetched; otherwise the synthetic grid
+        # provides an equivalent offline street graph.
+        road_vertices_m = None
+        if config.route_pattern == RoutePattern.ROAD:
+            road_vertices_m = _road_ways(self.plane, config)
+
         self.route = build_route(
             pattern=config.route_pattern,
             speed_ms=config.speed_ms,
@@ -248,12 +465,16 @@ class VehicleSimulator:
             initial_heading_rad=config.initial_heading_deg * DEG2RAD,
             rng=self.rng,
             custom_points_m=custom_m,
+            road_vertices_m=road_vertices_m,
         )
 
         # vehicle state
         self.s: float = 0.0
         self.v: float = 0.0
-        self.heading: float = wrap_angle(config.initial_heading_deg * DEG2RAD)
+        # The vehicle is placed already pointing along the route tangent. (The
+        # requested initial heading only shapes the route geometry; starting
+        # misaligned would inject a fictitious yaw-rate spike at t=0.)
+        self.heading: float = float(self.route.headings[0])
         self.t: float = 0.0
         self.step_index: int = 0
         self._prev_heading: float = self.heading

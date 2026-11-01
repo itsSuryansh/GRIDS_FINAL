@@ -29,15 +29,22 @@ from app.services.simulation_service import SimulationService  # noqa: E402
 
 CASES = [
     ("normal", ScenarioType.NORMAL, RoutePattern.CURVED, {}),
+    ("normal-road", ScenarioType.NORMAL, RoutePattern.ROAD, {}),
     ("outage", ScenarioType.OUTAGE, RoutePattern.CURVED,
+     dict(outage_start_s=30.0, outage_duration_s=40.0)),
+    ("outage-road", ScenarioType.OUTAGE, RoutePattern.ROAD,
      dict(outage_start_s=30.0, outage_duration_s=40.0)),
     ("drift", ScenarioType.DRIFT, RoutePattern.STRAIGHT,
      dict(drift_onset_s=20.0, drift_rate_ms=0.4, drift_max_m=150.0)),
     ("spoofing", ScenarioType.SPOOFING, RoutePattern.LEFT_TURN,
      dict(spoof_onset_s=25.0, spoof_jump_m=70.0, spoof_drift_ms=1.0)),
+    ("spoofing-road", ScenarioType.SPOOFING, RoutePattern.ROAD,
+     dict(spoof_onset_s=25.0, spoof_jump_m=70.0, spoof_drift_ms=1.0)),
     ("complex", ScenarioType.OUTAGE, RoutePattern.RANDOM,
      dict(outage_start_s=35.0, outage_duration_s=25.0)),
 ]
+
+ORDER = ["gnss", "dead_reckoning", "ekf_nomap", "ekf", "rts_smoothed"]
 
 
 def main() -> None:
@@ -69,6 +76,9 @@ def main() -> None:
                 "session_id": session_id,
                 "frames": report["ground_truth_samples"],
                 "rmse": {k: round(v["rmse_m"], 2) for k, v in report["algorithms"].items()},
+                "deltas": {k: (round(v, 2) if isinstance(v, (int, float)) else v)
+                           for k, v in (report.get("deltas") or {}).items()},
+                "rejected": report["anomalies"]["rejected_measurements"],
                 "anomalies": report["anomalies"],
                 "recovery": report.get("recovery"),
             }
@@ -80,16 +90,23 @@ def main() -> None:
 
     print(f"\nGRIDS headless benchmark  (duration={args.duration}s, seed={args.seed})")
     print("All figures are simulated and scored against the simulator's ground truth.\n")
-    header = f"{'scenario':<10}{'GNSS':>9}{'DR':>9}{'EKF':>9}{'anomalies':>11}{'rejected':>10}"
+    header = (
+        f"{'scenario':<14}{'GNSS':>8}{'DR':>8}{'EKF-nomap':>11}{'EKF':>8}"
+        f"{'RTS':>8}{'mapAid':>9}{'smooth':>9}{'rej':>7}"
+    )
     print(header)
     print("-" * len(header))
     for r in rows:
-        a = r["anomalies"]
+        rm = r["rmse"]
+        d = r["deltas"]
         print(
-            f"{r['scenario']:<10}{r['rmse']['gnss']:>9.2f}{r['rmse']['dead_reckoning']:>9.2f}"
-            f"{r['rmse']['ekf']:>9.2f}{a['detected']:>11}{a['rejected_measurements']:>10}"
+            f"{r['scenario']:<14}{rm['gnss']:>8.2f}{rm['dead_reckoning']:>8.2f}"
+            f"{rm['ekf_nomap']:>11.2f}{rm['ekf']:>8.2f}{rm['rts_smoothed']:>8.2f}"
+            f"{d.get('map_vs_nomap_rmse_m', 0):>9.2f}{d.get('smoothing_vs_ekf_rmse_m', 0):>9.2f}"
+            f"{r['rejected']:>7}"
         )
-    print("\nRMSE in metres. Lower is better.")
+    print("\nRMSE in metres, lower is better. mapAid/smooth are RMSE gains in metres")
+    print("(positive = the extra stage helped on that run).")
 
 
 if __name__ == "__main__":

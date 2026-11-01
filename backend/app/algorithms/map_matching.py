@@ -12,8 +12,14 @@ The MVP matcher is intentionally simple and explainable:
    ``max_snap_distance_m``; the search is confined to a small candidate set
    around the previous match to avoid jumping between parallel roads.
 
-Map matching is advisory only: it never feeds back into the EKF, so navigation
-keeps working when no map is available.
+Optionally the matcher also offers a **cross-track pseudo-measurement**: for a
+confident match (small offset, roughly aligned heading) the road line is used as
+a one-dimensional constraint on the position, which keeps the fused track on the
+carriageway during GNSS outages. That constraint is gated, capped and applied by
+the caller, so navigation keeps working when no map is available.
+
+A spatial hash keeps nearest-road search cheap on real OpenStreetMap data
+(thousands of segments).
 """
 from __future__ import annotations
 
@@ -55,6 +61,8 @@ class RoadNetwork:
         self.segments: List[RoadSegment] = list(segments or [])
         self.name = name
         self.source = "synthetic"
+        self._index: Optional[dict] = None
+        self._cell = 50.0
 
     def __len__(self) -> int:
         return len(self.segments)
@@ -98,6 +106,43 @@ class RoadNetwork:
             segs.append(RoadSegment((x, origin_en[1] - extent_m), (x, origin_en[1] + extent_m), f"N-S {i}"))
         return cls(segs, name="synthetic grid")
 
+    def _build_index(self) -> dict:
+        """Bucket segment ids into a square grid so search is O(local)."""
+        index: dict = {}
+        for i, seg in enumerate(self.segments):
+            x0, x1 = sorted((seg.a[0], seg.b[0]))
+            y0, y1 = sorted((seg.a[1], seg.b[1]))
+            for cx in range(int(math.floor(x0 / self._cell)), int(math.floor(x1 / self._cell)) + 1):
+                for cy in range(int(math.floor(y0 / self._cell)), int(math.floor(y1 / self._cell)) + 1):
+                    index.setdefault((cx, cy), []).append(i)
+        self._index = index
+        return index
+
+    def nearest_within(self, p: Tuple[float, float], radius_m: float):
+        """Nearest segment inside ``radius_m`` (uses the spatial index)."""
+        if not self.segments:
+            return None, float("inf"), (0.0, 0.0)
+        index = self._index if self._index is not None else self._build_index()
+        span = int(math.ceil(radius_m / self._cell))
+        cx0 = int(math.floor(p[0] / self._cell))
+        cy0 = int(math.floor(p[1] / self._cell))
+        seen: set = set()
+        best_seg, best_d, best_cp = None, float("inf"), (0.0, 0.0)
+        for cx in range(cx0 - span, cx0 + span + 1):
+            for cy in range(cy0 - span, cy0 + span + 1):
+                for i in index.get((cx, cy), ()):  # type: ignore[arg-type]
+                    if i in seen:
+                        continue
+                    seen.add(i)
+                    seg = self.segments[i]
+                    cp, d, _ = seg.project(p)
+                    if d < best_d:
+                        best_seg, best_d, best_cp = seg, d, cp
+        if best_seg is not None and best_d <= radius_m:
+            return best_seg, best_d, best_cp
+        # fall back to a full scan (network may extend past the search window)
+        return self.nearest(p)
+
     def nearest(self, p: Tuple[float, float], candidates: Optional[int] = None):
         best = (None, float("inf"), 0.0)
         for seg in self.segments:
@@ -140,7 +185,7 @@ class MapMatcher:
                 "road": None,
                 "position": None,
             }
-        seg, dist, cp = self.network.nearest(p_en)
+        seg, dist, cp = self.network.nearest_within(p_en, self.max_snap * 1.5)
         if seg is None or dist > self.max_snap:
             self.unmatched_count += 1
             self.last_matched = None

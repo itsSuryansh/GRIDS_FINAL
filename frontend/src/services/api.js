@@ -1,6 +1,6 @@
 /**
- * REST client. Uses relative URLs so the same build works behind the Vite
- * dev proxy, inside Docker Compose, and in hosted preview environments.
+ * REST client. Uses relative URLs so the same build works behind the Vite dev
+ * proxy, inside Docker Compose, and in hosted preview environments.
  */
 const BASE = import.meta.env.VITE_API_BASE || '/api'
 
@@ -45,6 +45,7 @@ export const api = {
   route: () => request('/navigation/route'),
   anomalies: () => request('/navigation/anomalies'),
   modules: () => request('/navigation/modules'),
+  smoothed: () => request('/navigation/smoothed'),
 
   summary: () => request('/analytics/summary'),
   compare: (series = true) => request(`/analytics/compare?include_series=${series}`),
@@ -52,6 +53,13 @@ export const api = {
   sessions: (limit = 30) => request(`/analytics/sessions?limit=${limit}`),
   session: (id) => request(`/analytics/sessions/${id}`),
   wsStatus: () => request('/ws/status'),
+
+  mapStatus: () => request('/map/status'),
+  mapRoads: (lat, lon, radius = 1500) =>
+    request(`/map/roads?lat=${lat}&lon=${lon}&radius_m=${radius}`),
+  prefetchTiles: (lat, lon) =>
+    request(`/map/prefetch?lat=${lat}&lon=${lon}`, { method: 'POST' }),
+  tileUrl: (z, x, y) => `${BASE}/map/tile/${z}/${x}/${y}.png`,
 }
 
 export default api

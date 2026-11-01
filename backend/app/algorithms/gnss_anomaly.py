@@ -75,8 +75,15 @@ class DetectorThresholds:
 
     nis_warn: float = 16.27        # chi2(2 dof, 0.999)
     nis_hard: float = 60.0
+    # a residual detector is only meaningful if the innovation is large in
+    # absolute terms as well; with 2.5 m receiver noise a NIS of 20 can still be
+    # a 6 m offset that no estimator should reject
+    # NOTE: the floor is deliberately generous. With 2.5 m receiver noise a 5 m
+    # innovation is normal, and a false rejection costs far more than accepting
+    # one mediocre fix (the EKF NIS gate inside the filter handles real outliers).
+    residual_floor_m: float = 8.0
 
-    residual_degraded_m: float = 10.0
+    residual_degraded_m: float = 15.0
 
     drift_window_s: float = 10.0
     # statistical significance multiplier for the windowed mean residual: the
@@ -104,8 +111,11 @@ class DetectorThresholds:
     # hysteresis: after an anomaly, keep distrusting GNSS until innovations are
     # small again for a short hold period (prevents a corrupted solution from
     # "walking back in" one accepted fix at a time)
-    hold_min_s: float = 1.5
-    hold_max_s: float = 45.0
+    hold_min_s: float = 1.0
+    hold_max_s: float = 20.0
+    # a *single* transient outlier is already removed by the NIS gate inside the
+    # EKF, so the hold-out is only armed after this many consecutive anomalies
+    hold_after_consecutive: int = 3
 
 
 class GnssAnomalyDetector:
@@ -123,6 +133,7 @@ class GnssAnomalyDetector:
         self.downweights = 0
         self._hold_until: float = 0.0
         self._hold_armed_at: float = 0.0
+        self._consecutive: int = 0
 
     # ------------------------------------------------------------------ core ---
     def evaluate(
@@ -220,12 +231,17 @@ class GnssAnomalyDetector:
         why.setdefault("position_jump", "no abnormal step")
 
         # ---------------- 4. innovation / residual ----------------
+        # severity is the worse of the statistical test (NIS) and the absolute
+        # test (metres), so a large offset cannot hide behind a conservative
+        # covariance and a small offset cannot be rejected on NIS alone
+        sev_nis = 0.0
         if nis is not None and np.isfinite(nis):
-            sev_res = float(np.clip(nis / max(th.nis_warn, 1e-6), 0.0, 1.0))
+            sev_nis = float(np.clip(nis / max(th.nis_warn, 1e-6), 0.0, 1.0))
+        sev_abs = float(np.clip(residual / max(th.residual_floor_m, 1e-6), 0.0, 1.0))
+        sev_res = max(sev_nis, sev_abs) if residual >= th.residual_floor_m else sev_nis * 0.5
+        if nis is not None and np.isfinite(nis):
             why["residual"] = f"innovation residual {residual:.1f} m (NIS {nis:.1f})"
         else:
-            scale = max(4.0 * sig, 0.25 * max(uncertainty_m, 1.0))
-            sev_res = float(np.clip(residual / scale, 0.0, 1.0))
             why["residual"] = f"innovation residual {residual:.1f} m"
         sev["residual"] = sev_res
 
@@ -286,6 +302,7 @@ class GnssAnomalyDetector:
 
         # ---- hysteresis / distrust hold ----
         severe = reject or (sev_drift >= th.warn_score) or (transient >= th.warn_score)
+        self._consecutive = self._consecutive + 1 if severe else 0
         if severe:
             self._hold_armed_at = t
             self._hold_until = t + th.hold_min_s
@@ -312,6 +329,11 @@ class GnssAnomalyDetector:
         if is_anomaly:
             self.detections += 1
 
+        if reject and dominant == "hold" and self._consecutive < th.hold_after_consecutive:
+            # isolated outlier: let the EKF's own NIS gate decide, keep the fix
+            reject = False
+            extra_sigma = sig * 2.0
+            dominant = "residual"
         if reject and dominant == "hold":
             anomaly_type = "hold"
             reason = (

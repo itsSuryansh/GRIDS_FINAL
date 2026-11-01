@@ -33,6 +33,7 @@ eigenvalue flooring, and heading kept wrapped to (-pi, pi].
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Optional
 
@@ -107,6 +108,7 @@ class ExtendedKalmanFilter:
         self.use_compass = bool(use_compass)
 
         self.last_innovation: Optional[Innovation] = None
+        self.cross_track_updates: int = 0
         self.last_gnss_update_t: Optional[float] = None
         self.rejected_count = 0
         self.update_count = 0
@@ -163,8 +165,14 @@ class ExtendedKalmanFilter:
         )
 
     # ----------------------------------------------------------- prediction ---
-    def predict(self, dt: float, accel_meas: float, yaw_rate_meas: float) -> np.ndarray:
-        """IMU-driven EKF prediction step."""
+    def predict(
+        self, dt: float, accel_meas: float, yaw_rate_meas: float, keep_jacobian: bool = False
+    ):
+        """IMU-driven EKF prediction step.
+
+        With ``keep_jacobian=True`` the transition matrix is returned alongside
+        the state so an RTS smoother can reuse it.
+        """
         if dt <= 0:
             raise ValueError("dt must be positive")
         e, n, v, psi, ba, bg = self.x
@@ -207,6 +215,8 @@ class ExtendedKalmanFilter:
         self.x = np.array([e_new, n_new, v_new, psi_new, ba, bg], dtype=float)
         self.P = self._stabilise(P_new)
         self.predict_count += 1
+        if keep_jacobian:
+            return self.x.copy(), F
         return self.x.copy()
 
     # ------------------------------------------------------------ corrections ---
@@ -304,10 +314,74 @@ class ExtendedKalmanFilter:
             "rejected_count": self.rejected_count,
         }
 
+    # ------------------------------------------------------- cross-track aid ---
+    def cross_track_sigma(self, route_e: float, route_n: float, route_heading: float,
+                          sigma_m: float) -> float:
+        """Innovation variance of a *pseudo-measurement* that constrains the
+        estimate to lie on a road corridor.
+
+        The constraint is expressed as ``d = 0`` where ``d`` is the signed
+        perpendicular distance from the estimated position to the road
+        reference point. Its gradient is the road normal, so the measurement
+        row is ``H = n^T [I2 | 0]`` and the innovation is ``-n^T (p - p_road)``.
+        Returns ``n^T P n + sigma^2`` for reporting.
+        """
+        nx = -math.sin(route_heading)
+        ny = math.cos(route_heading)
+        P = self.P[:2, :2]
+        var = nx * nx * P[0, 0] + ny * ny * P[1, 1] + 2.0 * nx * ny * P[0, 1]
+        return float(var + sigma_m ** 2)
+
+    def update_cross_track(
+        self,
+        route_e: float,
+        route_n: float,
+        route_heading: float,
+        sigma_m: float = 3.0,
+        gate: float = 3.0,
+    ) -> bool:
+        """Pull the estimate toward a road corridor, gated by its own innovation.
+
+        This is a soft constraint (finite ``sigma_m``), never a hard snap: the
+        filter keeps the inertial information and simply gains extra confidence
+        along the cross-track axis. Returns True when the update was applied.
+        """
+        nx = -math.sin(route_heading)
+        ny = math.cos(route_heading)
+        # signed perpendicular offset of the current estimate from the road
+        offset = nx * (self.x[I_E] - route_e) + ny * (self.x[I_N] - route_n)
+        H = np.zeros((1, N_STATE))
+        H[0, I_E] = nx
+        H[0, I_N] = ny
+        R = np.array([[sigma_m ** 2]])
+        # innovation for the pseudo-measurement z = 0 (i.e. on the corridor)
+        y = np.array([-offset])
+        S = float((H @ self.P @ H.T + R).item())
+        if S <= 0:
+            return False
+        nis = float(y[0] ** 2 / S)
+        if nis > gate ** 2:            # 3-sigma gate: do not fight the filter
+            return False
+        K = self.P @ H.T / S
+        self.x = self.x + (K * y[0]).ravel()
+        self.x[I_PSI] = wrap_angle(float(self.x[I_PSI]))
+        I_KH = np.eye(N_STATE) - K @ H
+        self.P = self._stabilise(I_KH @ self.P @ I_KH.T + K * R @ K.T)
+        self.cross_track_updates += 1
+        return True
+
+    def snapshot(self) -> dict:
+        """Compact record of the filter state, used for RTS smoothing."""
+        return {
+            "x": self.x.copy(),
+            "P": self.P.copy(),
+        }
+
     def reset(self, state: np.ndarray, cov: Optional[np.ndarray] = None) -> None:
         self.x = np.asarray(state, dtype=float).copy()
         self.P = self._stabilise(np.eye(N_STATE) * 10.0 if cov is None else cov)
         self.rejected_count = 0
         self.update_count = 0
         self.predict_count = 0
+        self.cross_track_updates = 0
         self.last_innovation = None

@@ -48,6 +48,12 @@ def compare(include_series: bool = Query(True)) -> dict:
     )
     if include_series:
         report["series"] = timeseries_for_charts(run.engine.frames)
+        report["smoothed_track"] = run.engine.smoothed_track()
+        report["map"] = {
+            "source": run.engine.map_source,
+            "cross_track_updates": run.engine.map_constraints,
+            "smoothing_lag_s": run.engine.smooth_lag_s,
+        }
     return report
 
 

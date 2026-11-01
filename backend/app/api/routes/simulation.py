@@ -89,7 +89,12 @@ def list_patterns() -> dict:
     """Available vehicle movement patterns."""
     return {
         "patterns": [p.value for p in RoutePattern],
-        "description": "Movement patterns available to the vehicle simulator.",
+        "default": RoutePattern.ROAD.value,
+        "recommended": [RoutePattern.ROAD.value, RoutePattern.CURVED.value,
+                        RoutePattern.RANDOM.value],
+        "description": "Movement patterns available to the vehicle simulator. "
+                       "'road' follows the street network (OpenStreetMap when "
+                       "reachable, a synthetic lattice otherwise).",
     }
 
 

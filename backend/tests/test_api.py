@@ -125,7 +125,9 @@ def test_full_lifecycle(client):
     # analytics after the run
     cmp = client.get("/api/analytics/compare").json()
     assert cmp["session_id"] == session_id
-    assert set(cmp["algorithms"]) == {"gnss", "dead_reckoning", "ekf", "ekf_ml"}
+    assert set(cmp["algorithms"]) == {
+        "gnss", "dead_reckoning", "ekf_nomap", "ekf", "ekf_ml", "rts_smoothed"
+    }
     assert cmp["algorithms"]["ekf"]["samples"] > 0
     assert cmp["series"]
 

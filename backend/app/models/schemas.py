@@ -16,6 +16,7 @@ class ScenarioType(str, Enum):
 
 
 class RoutePattern(str, Enum):
+    ROAD = "road"          # follow the street network (real streets when available)
     STRAIGHT = "straight"
     LEFT_TURN = "left_turn"
     RIGHT_TURN = "right_turn"
@@ -84,7 +85,7 @@ class SimulatorConfig(BaseModel):
     duration_s: float = Field(120.0, ge=1.0, le=1800.0)
     rate_hz: float = Field(10.0, ge=1.0, le=50.0)
     speed_ms: float = Field(12.0, ge=0.0, le=80.0)  # ~43 km/h
-    route_pattern: RoutePattern = RoutePattern.CURVED
+    route_pattern: RoutePattern = RoutePattern.ROAD
     route_seed: Optional[int] = Field(7, ge=0, le=10_000_000)
     custom_waypoints: Optional[List[Waypoint]] = None
 
@@ -96,6 +97,14 @@ class SimulatorConfig(BaseModel):
     gyro_bias_dps: float = Field(0.09, ge=-20.0, le=20.0)   # true IMU gyro bias
 
     enable_map_matching: bool = True
+    # Use OpenStreetMap road geometry for matching/aiding (falls back to the
+    # synthetic network automatically when it is unreachable).
+    use_real_map_data: bool = True
+    map_radius_m: float = Field(1500.0, ge=200.0, le=8000.0)
+    # Constrain the filter to the matched road corridor (soft cross-track
+    # pseudo-measurement). Improves cross-track error when road geometry is
+    # right; automatically gated when the match is poor.
+    enable_map_aiding: bool = True
     enable_ml_correction: bool = False
 
     @field_validator("custom_waypoints")

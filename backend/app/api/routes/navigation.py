@@ -81,3 +81,19 @@ def modules() -> dict:
         return {"modules": {}, "available": False}
     f = run.engine.frames[-1]
     return {"available": True, "modules": f.modules, "map_match": f.map_match}
+
+
+@router.get("/smoothed")
+def smoothed(max_points: int = Query(900, ge=50, le=5000)) -> dict:
+    """Retrospective (fixed-lag RTS) track for the active run."""
+    run = simulation_service.run
+    if run is None or not run.engine.frames:
+        return {"available": False, "points": []}
+    pts = run.engine.smoothed_track(max_points=max_points)
+    return {
+        "available": bool(pts),
+        "run_id": run.run_id,
+        "lag_s": run.engine.smooth_lag_s,
+        "count": len(pts),
+        "points": pts,
+    }

@@ -26,11 +26,14 @@ kinematically impossible fixes, persistent biases that exceed noise significance
 and the hysteretic hold-out that follows any anomaly.
 
 ## 5. Drift-pathological case documented, not hidden
-A slow bias is intrinsically ambiguous with respect to filter divergence. The
-reference drift run still yields EKF RMSE 25.9 m vs DR 32.0 m (simulated), i.e.
-the filter helps but the drift scenario remains the weakest case. This is stated
-in the README's limitations rather than being tuned away with an
-OSM-reference or truth-based correction that would not exist in reality.
+A slow common-mode bias is intrinsically ambiguous with respect to filter
+divergence: nothing in the inertial data reveals it. While the detector can see it,
+the fixes are rejected; once it is re-accepted the fused track follows the bias
+(reference run: EKF 26.5 m vs raw GNSS 21.4 m RMSE, simulated). The detector's
+residual floor was raised from 6 m to 8 m so that healthy runs are never rejected
+(the cost is a slightly later detection), and the weakness is stated in the README
+and in the UI instead of being tuned away with ground-truth information that would
+not exist in reality.
 
 ## 6. Drift correction cannot touch the EKF
 The corrector pulls the DR branch toward the filter only after five consecutive
@@ -43,16 +46,56 @@ sessions with unseen seeds. The measured held-out result was worse than the EKF
 baseline, so the default stays off and the dashboard shows the delta. Tests assert
 that the recommendation follows the measurement, not an assumption.
 
-## 8. Map matching is advisory
-Road data may be missing (offline) or wrong. Snapping never feeds back into the
-filter, the synthetic network is always available, and OSM is opt-in.
+## 8. Map aiding is a gated coasting aid, and the synthetic network never aids
+Road data may be missing (offline), out of date, or simply not the road the vehicle
+is on. Three decisions follow:
 
-## 9. One simulation loop, sockets subscribe
+* **Matching is always advisory.** The snap point is displayed and reported, never
+  used to correct the filter.
+* **Aiding is only for coasting.** While GNSS is delivering accepted fixes the filter
+  already has a better measurement than a road centre-line; forcing the track onto a
+  road biases healthy innovations. The cross-track constraint is therefore applied
+  only when GNSS is unavailable or its fixes are being rejected.
+* **The constraint must earn trust.** It needs a surveyed OSM network, a persistent
+  match offset ≤ 5 m, a filter 1σ ≤ 20 m, and it disables itself for the rest of the
+  run if the receiver keeps rejecting fixes while it is active. The synthetic network
+  (chords through the simulated route) is good enough to display a match, and much
+  too coarse to constrain a filter — so it never does.
+
+A parallel no-map shadow filter always runs the identical model, so the benefit is
+*measured* (`map_vs_nomap_rmse_m`) rather than asserted; the honest result is that it
+is small, and the README says so.
+
+## 9. Fixed-lag smoothing writes back into the past
+The RTS pass produces an estimate for a sample that is 4 s old. It is written into
+that sample's own frame and scored against that sample's ground truth. Scoring it
+against "now" (an early bug) produced a 2.5 km apparent error and would have made the
+smoother either look broken or be "fixed" by cheating. The state difference also
+wraps the heading component, otherwise crossing ±180° injects a large false
+correction.
+
+## 10. Real road geometry via the OSM map-data endpoint
+Public Overpass instances were unreachable/rate-limited here. The plain
+`api.openstreetmap.org/api/0.6/map?bbox=` endpoint answers in about a second with raw
+XML, needs no query language, and is used as the primary road source with Overpass as
+fallback; both are cached on disk for 12 h and surrounded by a global back-off so a
+dead network costs one timeout, not one per frame. Basemap tiles are proxied and
+cached by the backend for the same reason: the map must render during a demo with no
+internet. Providers that return a watermark placeholder (a tiny PNG) instead of a tile
+are rejected so they cannot poison the cache.
+
+## 11. One simulation loop, sockets subscribe
 The loop lives in `SimulationService`, not in a WebSocket handler, so reconnects
 and extra tabs cannot spawn duplicate loops. Control commands go over REST, so
 lifecycle transitions have a single source of truth.
 
-## 10. Batched persistence
+## 12. The simulator starts aligned with the route
+The requested initial heading shapes the route geometry; the vehicle itself is
+placed already pointing along the tangent. Starting misaligned injected a fictitious
+yaw-rate spike (≈1400 °/s) at t = 0, which the filter correctly treated as a real
+manoeuvre and which destroyed the first second of every run.
+
+## 13. Batched persistence
 Frames are buffered and flushed per ~250 samples as columnar JSON, with discrete
 anomaly events stored individually. This keeps SQLite compact and off the hot
 path while still allowing full session replay through the API.

@@ -8,7 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
  * Frames are throttled into React state at most every `renderHz` to keep the
  * dashboard responsive while the backend runs at its own rate.
  */
-export default function useSimulationSocket({ renderHz = 6, maxTrail = 900 } = {}) {
+export default function useSimulationSocket({ renderHz = 8, maxTrail = 2000 } = {}) {
   const [connected, setConnected] = useState(false)
   const [frame, setFrame] = useState(null)
   const [trail, setTrail] = useState([])
@@ -16,11 +16,12 @@ export default function useSimulationSocket({ renderHz = 6, maxTrail = 900 } = {
   const [summary, setSummary] = useState(null)
   const [report, setReport] = useState(null)
   const [lastError, setLastError] = useState(null)
+  const [latencyMs, setLatencyMs] = useState(null)
 
   const wsRef = useRef(null)
   const reconnectRef = useRef(null)
   const pendingRef = useRef(null)
-  const rafRef = useRef(null)
+  const timerRef = useRef(null)
   const lastPushRef = useRef(0)
   const unmountedRef = useRef(false)
 
@@ -46,9 +47,9 @@ export default function useSimulationSocket({ renderHz = 6, maxTrail = 900 } = {
         const f = pendingRef.current
         pendingRef.current = null
         pushFrame(f)
-      } else if (rafRef.current == null) {
-        rafRef.current = window.setTimeout(() => {
-          rafRef.current = null
+      } else if (timerRef.current == null) {
+        timerRef.current = window.setTimeout(() => {
+          timerRef.current = null
           lastPushRef.current = performance.now()
           if (pendingRef.current) {
             pushFrame(pendingRef.current)
@@ -107,12 +108,12 @@ export default function useSimulationSocket({ renderHz = 6, maxTrail = 900 } = {
               const merged = [...msg.data, ...prev]
               return merged.slice(Math.max(0, merged.length - maxTrail))
             })
-            const last = msg.data[msg.data.length - 1]
-            setFrame((prev) => prev || last)
+            setFrame((prev) => prev || msg.data[msg.data.length - 1])
           }
           if (msg.summary) setSummary(msg.summary)
           break
         case 'navigation_update':
+          if (msg.server_time) setLatencyMs(Math.max(0, Date.now() / 1000 - msg.server_time) * 1000)
           scheduleFrame(msg.data)
           if (msg.status) setStatus((s) => ({ ...(s || {}), ...msg.status }))
           if (msg.summary) setSummary(msg.summary)
@@ -135,7 +136,7 @@ export default function useSimulationSocket({ renderHz = 6, maxTrail = 900 } = {
     return () => {
       unmountedRef.current = true
       if (reconnectRef.current) window.clearTimeout(reconnectRef.current)
-      if (rafRef.current) window.clearTimeout(rafRef.current)
+      if (timerRef.current) window.clearTimeout(timerRef.current)
       if (wsRef.current && wsRef.current.readyState <= 1) wsRef.current.close()
     }
   }, [connect])
@@ -154,6 +155,7 @@ export default function useSimulationSocket({ renderHz = 6, maxTrail = 900 } = {
     summary,
     report,
     lastError,
+    latencyMs,
     clearTrail,
     setReport,
     setStatus,

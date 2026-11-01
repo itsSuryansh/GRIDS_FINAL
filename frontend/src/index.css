@@ -2,96 +2,108 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Leaflet base styles are imported from the JS entry (vite handles the css) */
-
 :root {
   color-scheme: light;
 }
 
-html, body, #root {
-  height: 100%;
-}
+html, body, #root { height: 100%; }
 
 body {
-  @apply bg-navy-50 text-navy-900 antialiased;
+  @apply bg-slate-50 text-slate-800 antialiased;
   font-feature-settings: 'tnum' 1;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* ---------------- scrollbars ---------------- */
-::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar { width: 9px; height: 9px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #c3cfe4; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #93a8cd; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; background-clip: content-box; }
 
 @layer components {
   .panel {
-    @apply bg-white border border-navy-100 rounded-md shadow-card;
+    @apply bg-white border border-slate-200 rounded-lg shadow-[0_1px_2px_rgba(15,23,42,0.04)];
   }
   .panel-header {
-    @apply flex items-center justify-between gap-3 px-4 py-2.5 border-b border-navy-100;
+    @apply flex items-center justify-between gap-3 px-3.5 py-2 border-b border-slate-200/80;
   }
   .panel-title {
-    @apply text-[13px] font-semibold tracking-wide text-navy-800 uppercase;
+    @apply text-[11.5px] font-semibold tracking-[0.08em] text-slate-700 uppercase;
   }
   .metric-label {
-    @apply text-2xs uppercase tracking-wider text-navy-400 font-medium;
+    @apply text-[10px] uppercase tracking-[0.07em] text-slate-400 font-semibold;
   }
   .metric-value {
-    @apply font-mono text-navy-900 tabular-nums;
+    @apply font-mono text-slate-900 tabular-nums;
   }
   .btn {
-    @apply inline-flex items-center justify-center gap-1.5 rounded px-3 py-1.5 text-xs font-semibold
-           transition-colors duration-100 disabled:opacity-40 disabled:cursor-not-allowed
-           focus:outline-none focus-visible:ring-2 focus-visible:ring-sig-blue/40;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold
+           transition-all duration-100 disabled:opacity-40 disabled:cursor-not-allowed
+           focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40;
   }
   .btn-primary {
-    @apply btn bg-sig-blue text-white hover:bg-blue-800;
+    @apply btn bg-blue-700 text-white hover:bg-blue-800 shadow-sm;
   }
   .btn-secondary {
-    @apply btn bg-white text-navy-800 border border-navy-200 hover:bg-navy-50;
+    @apply btn bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 hover:border-slate-400;
   }
   .btn-danger {
-    @apply btn bg-white text-sig-red border border-red-200 hover:bg-red-50;
+    @apply btn bg-white text-red-600 border border-red-300 hover:bg-red-50;
+  }
+  .btn-ghost {
+    @apply btn text-slate-500 hover:bg-slate-100;
   }
   .chip {
-    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-semibold
-           uppercase tracking-wide;
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-[2px] text-[10px] font-bold
+           uppercase tracking-[0.04em] whitespace-nowrap;
   }
   .field-label {
-    @apply block text-2xs font-semibold uppercase tracking-wider text-navy-500 mb-1;
+    @apply block text-[10px] font-semibold uppercase tracking-[0.07em] text-slate-500 mb-1;
   }
   .field-input {
-    @apply w-full rounded border border-navy-200 bg-white px-2 py-1.5 text-xs text-navy-900
-           font-mono tabular-nums focus:border-sig-blue focus:outline-none focus:ring-1 focus:ring-sig-blue/30;
+    @apply w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-900
+           font-mono tabular-nums focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500/20;
   }
   .tab {
-    @apply px-3 py-1.5 text-xs font-semibold rounded border border-transparent text-navy-500 hover:text-navy-800;
+    @apply px-3 py-1.5 text-xs font-semibold rounded-md border border-transparent text-slate-500
+           hover:text-slate-800 hover:bg-white/60 transition-colors;
   }
   .tab-active {
-    @apply bg-white border-navy-200 text-navy-900 shadow-card;
+    @apply bg-white border-slate-200 text-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.06)];
+  }
+  .divider-label {
+    @apply text-[10px] font-bold uppercase tracking-[0.09em] text-slate-400;
   }
 }
 
-/* ---------------- leaflet overrides (light, technical look) ---------------- */
+/* ------------------------------ leaflet ------------------------------ */
 .leaflet-container {
-  background: #eef2f8;
+  background: #eef1f6;
   font-family: inherit;
   font-size: 11px;
+  outline: none;
 }
 .leaflet-control-attribution {
   font-size: 9px !important;
+  background: rgba(255, 255, 255, 0.86) !important;
+  padding: 1px 4px !important;
+}
+.leaflet-bar a { color: #334155 !important; }
+/* Calm the raster basemap so the trajectory layers stay dominant. */
+.leaflet-tile-pane { filter: saturate(0.45) contrast(1.03) brightness(1.04); }
+.leaflet-zoom-animated { will-change: transform; }
+.leaflet-popup-content-wrapper { border-radius: 6px; font-size: 11px; }
+.leaflet-popup-content { margin: 8px 10px; line-height: 1.45; }
+.vehicle-marker { background: transparent; border: none; }
+.leaflet-control-scale-line {
+  border: 1px solid #94a3b8 !important;
+  border-top: none !important;
   background: rgba(255, 255, 255, 0.8) !important;
-}
-.leaflet-bar a {
-  color: #1b2b4d !important;
-}
-.leaflet-popup-content-wrapper {
-  border-radius: 4px;
-  font-size: 11px;
+  font-size: 9px !important;
+  color: #475569 !important;
 }
 
-/* pseudo-GNSS marker: no animation, precise */
-.vehicle-marker {
-  background: transparent;
-  border: none;
-}
+/* map tiles that failed to load stay transparent so the grid shows through */
+.tile-missing { opacity: 0; }
+
+.recharts-cartesian-axis-tick text { fill: #64748b; }
+.recharts-legend-item-text { color: #475569 !important; }

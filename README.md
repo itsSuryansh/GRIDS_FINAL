@@ -2,11 +2,14 @@
 
 GRIDS is an independent navigation-technology platform for **resilient positioning**:
 it keeps estimating where a vehicle is when GNSS becomes unavailable, degraded, or
-untrustworthy. The platform ships as a working, self-contained MVP: a physics-based
-vehicle/sensor simulator, a dead-reckoning integrator, a 6-state Extended Kalman
-Filter, an explainable GNSS anomaly detector with graduated response, drift
-monitoring, optional map matching, a real-time WebSocket stream, a mission-control
-style dashboard, and ground-truth-scored performance analytics persisted in SQLite.
+untrustworthy. The platform ships as a complete, self-contained product: a
+physics-based vehicle/sensor simulator, a dead-reckoning integrator, a 6-state
+Extended Kalman Filter with a parallel no-map shadow filter for honest A/B
+measurement, a fixed-lag **RTS smoother** for the retrospective track, an
+explainable GNSS anomaly detector with graduated response, drift monitoring,
+**road-network map matching with a gated cross-track constraint** on a real
+OpenStreetMap basemap, a real-time WebSocket stream, a two-view mission-control
+dashboard, and ground-truth-scored performance analytics persisted in SQLite.
 
 > **Data provenance.** Everything the platform displays is produced by the
 > simulator that ships in this repository. It is *simulated* navigation data.
@@ -17,9 +20,10 @@ style dashboard, and ground-truth-scored performance analytics persisted in SQLi
 
 ![GRIDS operations dashboard](docs/images/dashboard-operations.png)
 
-*Operations view during a run: live GNSS/DR/EKF tracks on the offline basemap,
-GNSS channel diagnostics, per-module health, system metrics and live analytics.
-All values come from the backend in real time.*
+*Operations view mid-outage: the vehicle follows a real Jaipur street network on a
+cached OpenStreetMap basemap while GNSS is unavailable; EKF, DR and the map-matched
+position stay live, with GNSS-integrity diagnostics and per-module health on the right.
+Every value comes from the backend in real time.*
 
 ---
 
@@ -41,14 +45,16 @@ is allowed to influence the estimate.
 
 | Capability | Status | Notes |
 |---|---|---|
-| Vehicle motion simulator (6 patterns, configurable speed/duration/noise) | ✅ | Ground-truth trajectory is the scoring reference |
+| Vehicle motion simulator (7 patterns incl. street-graph following, configurable speed/duration/noise) | ✅ | Ground-truth trajectory is the scoring reference |
 | GNSS simulator: normal / outage / drift / spoofing | ✅ | Missing fixes are `None`, never zero |
 | IMU + odometry sensor simulation with true biases | ✅ | DR genuinely accumulates error |
 | Dead reckoning (EN frame, heading-aware) | ✅ | Independent of the EKF, used as a baseline |
 | Extended Kalman Filter (6 states, NIS gating, Joseph update) | ✅ | Numerically stabilised, covariance exposed |
 | GNSS anomaly detection (5 explainable detectors) | ✅ | Accept / down-weight / reject / hold-out policy |
 | Drift monitoring + bounded correction | ✅ | Correction blocked unless GNSS is demonstrably healthy |
-| Map matching | ✅ | Offline synthetic road network by default; optional OSM |
+| Map matching + map-aided cross-track constraint | ✅ | Real OpenStreetMap road network; synthetic lattice offline; the constraint is gated and self-disabling |
+| Fixed-lag RTS smoother (retrospective track) | ✅ | 4 s lag, scored at each sample's own timestamp |
+| Basemap tiles cached by the backend | ✅ | Real map background with no internet after the first look |
 | ML drift correction | ⚠️ optional, **disabled by default** | Trained + honestly evaluated; no measured improvement on held-out sessions in this MVP |
 | Real-time WebSocket stream + REST API | ✅ | Socket is a pure subscriber; no duplicate loops |
 | Performance analytics vs ground truth | ✅ | MAE, RMSE, mean, max, P95, outage recovery |
@@ -99,6 +105,12 @@ Key architectural decisions:
 * **Storage is coarse-grained on purpose.** Frames are buffered and flushed in
   batches of ~250 as compact columnar JSON; only discrete anomaly events are
   written individually.
+* **Every enhancement is measurable.** The no-map shadow filter and the
+  RTS-smoothed track both run in the same pipeline, so the report states the
+  measured delta for map aiding and smoothing instead of asserting a benefit.
+* **Online map data is an enrichment, never a dependency.** Road geometry and
+  basemap tiles are fetched once and cached on disk; a dead network changes the map
+  backdrop, not the navigation, the metrics or the tests.
 
 ---
 
@@ -112,8 +124,11 @@ scikit-learn, SQLAlchemy 2, native WebSockets.
 **ML** scikit-learn (`GradientBoostingRegressor`, multi-output), joblib.
 **Infra** Docker, Docker Compose, Python virtualenv, Git.
 
-No external service is required for any core function; the optional OSM lookup is
-off by default.
+No external service is required for any core function: the simulator, the filters,
+the detector, persistence and every chart work offline. OpenStreetMap road geometry
+and basemap tiles are *optional enrichments* — they are fetched once, cached on
+disk (12 h for roads, forever for tiles) and skipped silently when unreachable
+(`GRIDS_MAP_ONLINE=0` disables them explicitly).
 
 ---
 
@@ -240,14 +255,37 @@ a smoothed drift rate. `DriftCorrector` applies a *bounded* correction
 (`gain = 0.08`, `max 2.5 m` per step) to the DR branch only, and only when the
 last five GNSS fixes were accepted without anomaly. The EKF is never modified.
 
-### 5.7 Map matching (`algorithms/map_matching.py`, `services/osm_service.py`)
+### 5.7 Map matching and map aiding (`algorithms/map_matching.py`, `services/map_data_service.py`)
 
-Nearest-segment snapping with a snap-distance gate (40 m), light temporal
-smoothing and a "no map → unmatched" path. By default the road network is derived
-from the simulated route, so the feature works with zero internet access. With
-`GRIDS_ENABLE_OSM=1` the backend queries the Overpass API and caches the result;
-if the network is unreachable, the synthetic network is used and the API reports
-`map_source: "synthetic"`. Map matching never feeds back into the filter.
+The matcher projects the fused position onto a **road network of real drivable ways**:
+
+* **Road data.** `services/map_data_service.py` fetches OpenStreetMap geometry with
+  the plain OSM map-data endpoint (bbox query, XML — about a second, no query
+  language), keeps Overpass as a secondary source, and caches the result on disk for
+  12 h. It filters to drivable `highway` classes and builds the local EN network.
+* **Offline behaviour.** With no network the caller keeps the synthetic lattice
+  (a hinted street grid or the simulated route), the UI keeps its cached basemap
+  tiles, and every metric stays available.
+* **Search.** A 50 m spatial hash keeps nearest-segment search O(local) on
+  networks of thousands of segments (≈0.5 ms per match).
+* **Matching.** Snap distance gate (40 m), temporal smoothing, and a "no map →
+  unmatched" path. The map shows the snapped point and the offset to the fused track.
+* **Map aiding.** While GNSS is *not* delivering accepted fixes, the road centre
+  line is applied as a **soft cross-track pseudo-measurement** (`H = [n_e, n_n]`,
+  σ from the match offset). It is only allowed when
+
+  1. the network is a surveyed street network (`source == "osm"`),
+  2. the exponentially averaged match offset over trusted fixes is ≤ 5 m,
+  3. the filter's own 1σ position is ≤ 20 m,
+  4. the per-step offset is ≤ 5 m, and
+  5. the constraint has not been discredited (≥ 25 delivered-but-rejected fixes
+     while aiding was active ⇒ aiding is switched off for the rest of the run).
+
+  A parallel **no-map shadow filter** (`ekf_nomap`) always runs the identical model
+  without aiding, so the report can state the measured `map_vs_nomap` RMSE delta
+  instead of claiming a benefit. In the reference runs it is small (≤ 0.3 m) and
+  occasionally negative — the honest conclusion is that most of GRIDS' outage
+  accuracy comes from the IMU/odometry model, not from the map.
 
 ### 5.8 Optional ML correction (`ml/`)
 
@@ -262,19 +300,39 @@ was *worse* than the EKF baseline (RMSE 10.04 m vs 8.44 m over the mixed test
 set), so the layer stays **disabled by default** and the dashboard shows the
 measured delta instead of assuming an improvement.
 
-### 5.9 Per-step pipeline (`services/navigation_service.py`)
+### 5.9 Fixed-lag RTS smoother (`algorithms/smoother.py`)
+
+A Kalman filter may only use measurements up to *now*. For every step the engine
+also stores `x_k|k`, `P_k|k`, the transition Jacobian and the predicted pair
+`x_k|k-1`, `P_k|k-1`, which is exactly what a Rauch-Tung-Striebel pass needs. Every
+step the backward recursion runs from the newest sample down to a fixed lag of 4 s
+(`lagged_point`, cost O(lag), not O(window)) and the result is written back into the
+**frame of its own timestamp**. Two consequences that matter:
+
+* the smoothed track is not a second live estimate — it is retrospective, behind by
+  the lag, and the dashboard labels it as such;
+* it is scored against the ground truth of *its own* sample, never against "now",
+  which is the mistake that makes smoothing look either magical or broken.
+
+The heading component is differenced with wrapping, so crossing the ±180° branch cut
+cannot inject a large false correction.
+
+### 5.10 Per-step pipeline (`services/navigation_service.py`)
 
 ```
-1 simulator step            → ground truth + IMU/odometry/GNSS
-2 EKF predict (IMU)         → survives outages by construction
-3 GNSS innovation (no update)
-4 anomaly evaluation        → score, reason, policy
-5 GNSS update if trusted    → EKF NIS gate as second line of defence
-6 odometry speed update     → GNSS-independent
-7 dead-reckoning integration
-8 bounded DR correction     → only while GNSS is healthy
-9 drift monitoring (+ optional ML)
-10 map matching (advisory, throttled)
+ 1 simulator step            → ground truth + IMU/odometry/GNSS (street-graph route)
+ 2 EKF predict (IMU)         → survives outages by construction
+   + parallel no-map shadow filter (identical model, no map aiding)
+ 3 GNSS innovation (no update) → NIS, residual
+ 4 anomaly evaluation        → score, reason, graduated policy
+ 5 GNSS update if trusted    → EKF NIS gate as second line of defence
+ 6 odometry speed update     → GNSS-independent
+ 6b map-aided cross-track    → only while coasting + all five gates pass
+ 7 dead-reckoning integration
+ 8 bounded DR correction     → only while GNSS is healthy
+ 9 drift monitoring (+ optional ML)
+ 9b fixed-lag RTS smoothing  → written back into the past frame
+10 map matching (throttled, last fix held between updates)
 11 frame assembly           → geodetic coords, errors vs truth, module health
 ```
 
@@ -283,26 +341,56 @@ measured delta instead of assuming an improvement.
 ## 6. Performance analytics
 
 Every estimator is scored at the **same timestamps** against the **same ground
-truth**: MAE, RMSE, mean, max, P95, sample count — separately for GNSS, dead
-reckoning, EKF and EKF+ML, plus outage peak error, error at outage end, drift
-rate during the outage, time to recover below 10 m, anomaly count and rejected
-measurement count. Comparisons are never made between misaligned samples.
+truth**: MAE, RMSE, mean, max, P95 and sample count for **six estimators** — raw
+GNSS, dead reckoning, the no-map shadow EKF, the map-aided EKF, the optional
+EKF+ML variant and the RTS-smoothed track — plus outage peak error, error at
+outage end, drift rate during the outage, time to recover below 10 m, anomaly
+counts and rejected-measurement counts. Comparisons are never made between
+misaligned samples, and two deltas are reported explicitly:
 
-Reference results produced by `scripts/run_scenarios.py` (120 s, seed 42, 10 Hz,
-σ_gnss = 2.5 m — *simulated*):
+* `map_vs_nomap_rmse_m` — how much the cross-track map constraint actually bought
+  (positive = aiding helped), measured against the always-running shadow filter;
+* `smoothing_vs_ekf_rmse_m` — how much the retrospective RTS pass bought.
 
-| Scenario | GNSS RMSE | DR RMSE | EKF RMSE | anomalies | rejected |
-|---|---|---|---|---|---|
-| normal | 3.49 | 1.80 | 0.54 | 41 | 16 |
-| outage (30–70 s) | 3.50 | 11.49 | 4.79 | 48 | 32 |
-| drift (0.4 m/s from 20 s) | 21.35 | 32.00 | 25.92 | 581 | 511 |
-| spoofing (70 m jump at 25 s) | 107.53 | 50.48 | 6.14 | 955 | 951 |
-| complex (random route + outage) | 3.53 | 6.22 | 0.65 | 37 | 16 |
+Reference results from `scripts/run_scenarios.py` (120 s, 10 Hz, seed 42,
+σ_gnss = 2.5 m — *simulated*, street-graph routes on Jaipur road geometry):
+
+| Scenario | GNSS | DR | EKF no-map | **EKF** | **RTS** | map-aid Δ | smoothing Δ |
+|---|---|---|---|---|---|---|---|
+| normal, street route | 3.57 | 1.68 | 0.63 | **0.63** | **0.42** | 0.00 | +0.21 |
+| normal, curved route | 3.49 | 1.67 | 0.51 | **0.51** | **0.31** | 0.00 | +0.20 |
+| outage 30–70 s, street route | 3.56 | 3.05 | 0.68 | **0.71** | **0.54** | −0.02 | +0.17 |
+| outage 30–70 s, curved route | 3.50 | 11.60 | 4.88 | **4.88** | **4.12** | 0.00 | +0.76 |
+| drift 0.4 m/s from 20 s | 21.35 | 28.22 | 26.49 | 26.49 | 24.81 | 0.00 | +1.68 |
+| spoofing, 70 m jump at 25 s | 107.53 | 50.46 | 6.27 | **6.27** | **5.85** | 0.00 | +0.42 |
+| spoofing, street route | 107.53 | 5.70 | 0.97 | **1.30** | **1.18** | −0.33 | +0.12 |
+| complex (random route + outage) | 3.53 | 6.08 | 0.52 | **0.52** | **0.39** | 0.00 | +0.13 |
+
+RMSE in metres, lower is better. Deltas are RMSE gains in metres (positive = the
+extra stage helped on that run).
+
+Reading the table honestly:
+
+* The fused EKF is **~5–7× better than raw GNSS** on normal runs and stays within a
+  few metres through a 40 s outage, where pure dead reckoning drifts to 3–12 m and a
+  curved route without map aiding to 4.9 m.
+* Under spoofing the detector rejects the corrupted channel and the filter coasts on
+  IMU data: GNSS RMSE is 107 m while the fused track stays ≈ 1–6 m.
+* The RTS pass is a consistent, small improvement (0.1–1.7 m) and is free — it only
+  needs the data the filter already produced.
+* **Map aiding is not a headline win.** Gated as described in §5.7 it buys at most a
+  few decimetres here, because the IMU/odometry model is already good. It is kept
+  because it protects against lateral divergence during long outages, and it is
+  reported with its measured sign, sometimes negative.
+* **GNSS drift is the documented weakness.** A slow bias is indistinguishable from a
+  real position offset, so once the detector has to re-accept the channel the fused
+  track follows the bias (EKF 26.5 m ≈ GNSS 21.4 m). Rejecting it would be worse —
+  the vehicle would dead-reckon on a biased IMU. This is stated in the UI too.
+* The ML layer is off: on held-out sessions it measured **10.04 m vs 8.44 m** for the
+  baseline, so the honest recommendation is `recommended_default = false`.
 
 These numbers are reproduced by the script on demand; they are not constants in
 the code.
-
----
 
 ## 7. REST API
 
@@ -322,6 +410,11 @@ Interactive documentation: `http://localhost:8000/docs`.
 | GET | `/api/navigation/route` | planned route, outage window, map source |
 | GET | `/api/navigation/anomalies` | discrete anomaly events |
 | GET | `/api/navigation/modules` | module health |
+| GET | `/api/navigation/smoothed` | retrospective RTS track (fixed-lag, own timestamps) |
+| GET | `/api/map/roads?lat=&lon=&radius_m=` | real road geometry (OSM, cached) |
+| GET | `/api/map/tile/{z}/{x}/{y}.png` | cached basemap tile (204 when unknown) |
+| POST | `/api/map/prefetch?lat=&lon=` | warm the tile cache around a point |
+| GET | `/api/map/status` | online-map availability, tile cache size |
 | GET | `/api/analytics/summary` | live running metrics |
 | GET | `/api/analytics/compare?include_series=` | full comparison report |
 | GET | `/api/analytics/ml` | ML model status + held-out evaluation |
@@ -355,50 +448,87 @@ Custom route example:
 
 | Scenario | What the simulator does | What you should observe |
 |---|---|---|
-| **1 · Normal** | GNSS available throughout with configurable noise | GNSS, DR and EKF all track truth; EKF smoother than raw GNSS |
+| **1 · Normal** | GNSS available throughout with configurable noise | GNSS, DR and EKF all track truth; EKF ~6× better than raw GNSS, RTS a further step |
 | **2 · Outage** | GNSS stops entirely for a configurable window | EKF and DR keep moving; error and covariance grow, then recover after the fix returns |
-| **3 · Drift** | Bias grows slowly in a near-fixed direction | Windowed-residual detector raises the alarm; corrupted fixes are down-weighted/rejected; EKF does not follow the false track |
+| **3 · Drift** | Bias grows slowly in a near-fixed direction | Windowed-residual detector raises the alarm and the fixes are rejected while it is detectable; once the bias is accepted again the filter follows it (see §13.2 — a common-mode bias is not observable) |
 | **4 · Spoofing** | Instant jump + continuous false walk | Jump/velocity/heading detectors fire immediately; fixes rejected; EKF coasts |
 | **5 · Complex** | Randomised route with turns, accel/decel, mid-run outage | Navigation continues through aggressive manoeuvres; EKF bounds DR drift |
 
 Scenario 5 is exposed as `scenario: "complex"` and automatically uses the random
 route pattern.
 
+**Route patterns** (independent of the scenario): `road` (default — follows the
+street graph), `straight`, `left_turn`, `right_turn`, `curved`, `random`, `custom`
+(waypoints). The `road` pattern builds its graph from OpenStreetMap ways when the
+map data is reachable and from a synthetic street lattice otherwise, clips it to a
+600 m window, and then walks it preferring junctions, so the vehicle really drives
+on the drawn streets — which is what makes map matching meaningful.
+
 ---
 
 ## 9. Dashboard
 
-Mission-control layout, light theme, navy typography, blue accents, compact data
-density:
+Two views, one shell: a mission-control **Operations** view for driving a run and
+an **Analytics & sessions** view for scoring it. Light theme, navy typography, blue
+accents, dense-but-legible data layout, and sticky controls that never scroll away.
+
+**Operations view**
 
 * **Top bar** — product identity, system / simulation / GNSS / link status pills,
-  mission clock.
-* **Navigation map** (Leaflet) — ground truth, GNSS, dead reckoning, EKF and
-  EKF+ML tracks with per-layer toggles, vehicle heading marker, start point,
-  GNSS-outage regions, detected-anomaly markers, live coordinate readout. Two
-  basemaps: an **offline graticule grid** (default, works with no internet) and
-  CARTO/OSM light tiles (optional).
-* **GNSS channel** — status, fix validity, residual, anomaly score, NIS, raw
-  error, rejected count, per-detector severity bars, detector explanation.
-* **Navigation algorithms** — live state of GNSS, DR, EKF, anomaly detection,
-  drift correction and map matching (`active`, `degraded`, `coasting`,
-  `rejected`, `alert`, `unavailable`, …).
-* **System metrics** — latitude, longitude, speed, heading, GNSS availability,
-  position error (with DR and GNSS comparison), drift estimate, EKF 1σ.
-* **Live analytics** — five switchable charts: position error, GNSS residual +
-  anomaly score, velocity, drift accumulation, EKF uncertainty vs actual error,
-  with outage shading.
-* **Simulation control** — start / pause / resume / stop / reset, scenario
-  selection, fault parameters, route pattern, speed, duration, rate, origin,
-  seed, sensor noise, module toggles.
-* **Analytics page** — comparison table (best estimator highlighted), RMSE/P95
-  bar chart, per-timestamp error curves, outage-recovery panel, ML evaluation
-  panel, stored-session archive with click-through reports.
+  mission clock, and a *Configure* button that opens the system drawer.
+* **Mission control** (left rail) — start / pause / resume / stop / reset with a
+  progress bar, then collapsible sections: scenario + fault parameters, vehicle &
+  route (including the street-graph `road` pattern, origin, seed, heading), sensor
+  noise 1σ, and module toggles (map matching, map aiding, real map data, ML).
+* **KPI strip** — position error (with DR and RTS in the subtitle), GNSS
+  availability, integrity events, live map-match offset and the EKF position σ.
+* **Navigation map** (Leaflet) — **real OpenStreetMap basemap served and cached by
+  the backend** with the ground-truth, GNSS, DR, no-map EKF, EKF, RTS and EKF+ML
+  tracks as independently toggled layers; vehicle heading marker; OSM road overlay;
+  outage stretches highlighted along the true path; anomaly markers with popups;
+  map-match snap point joined to the fused track by an offset line; scale bar,
+  follow-vehicle mode, offline-graticule fallback, one-click tile caching and a
+  true full-screen mode.
+* **GNSS integrity** — status, fix validity, residual, NIS, raw error, rejected
+  count, per-detector severity bars and the detector's plain-language explanation.
+* **Map matching** — matched road name, offset, gate, aiding state, road source.
+* **Algorithm chain** — live state of GNSS, DR, EKF, anomaly detection, drift
+  correction, map matching, map aiding, RTS smoothing and ML.
+* **System metrics** — latitude/longitude, speed/heading, availability, position
+  error vs DR vs GNSS, drift estimate, EKF 1σ, map offset, residual, rejected fixes,
+  anomalies, with a footnote explaining what σ and √tr(P) do and do not mean.
+* **Live analytics** — five switchable charts (position error, GNSS residual +
+  anomaly score, velocity, drift, EKF uncertainty vs actual error) with outage
+  shading, plus an integrity event log.
+* **System drawer** — runtime, map-data provenance and cache state, API entry
+  points, and the limitations of the current build, stated where an operator will
+  actually read them.
+
+**Analytics & sessions view**
+
+* Comparison table over the six estimators with the best RMSE highlighted, plus
+  MAE / mean / P95 / max / sample count, and delta tiles for EKF-vs-GNSS,
+  map-aiding gain, smoothing gain and ML gain.
+* RMSE/P95 bar chart and per-timestamp error curves for the same run.
+* Outage-recovery panel (peak error, error at outage end, drift rate, recovery time).
+* Measured ML evaluation panel.
+* Stored-session archive in SQLite; click any row to load that run's report.
 
 ![GRIDS analytics view](docs/images/dashboard-analytics.png)
 
-*Analytics view: per-estimator RMSE/MAE/P95/max at identical timestamps, outage
-recovery figures, the measured ML evaluation, and the stored-session archive.*
+*Analytics view: per-estimator RMSE/MAE/P95/max at identical timestamps, the
+map-aiding and RTS deltas, outage recovery figures, the measured ML evaluation and
+the stored-session archive.*
+
+![GRIDS full-screen map](docs/images/map-fullscreen.png)
+
+*Full-screen map during an outage: the vehicle stays on the real street network
+while GNSS is denied, with the retrospective RTS track behind it.*
+
+![GRIDS idle dashboard](docs/images/dashboard-idle.png)
+
+*Idle dashboard: the street-following route is planned on the cached OpenStreetMap
+basemap before the run starts; controls, KPIs and diagnostics are all live.*
 
 ---
 
@@ -457,7 +587,7 @@ docker compose down          # add -v to drop the SQLite volume
 
 ```bash
 cd backend
-python -m pytest -q                 # 90 tests, ~11 s
+python -m pytest -q                 # 103 tests, ~25 s
 python -m pytest tests/test_api.py -q -v
 ```
 
@@ -471,8 +601,9 @@ Coverage:
 | `test_ekf.py` | prediction, covariance growth, GNSS/velocity/heading updates, Joseph stability over 400 steps, NIS gating, outage coasting, bias observability, reset |
 | `test_anomaly.py` | zero rejections on clean GNSS, jump detection, persistent-drift detection, graduated response, status classification, explainability fields |
 | `test_drift_and_metrics.py` | drift monitor/rate, bounded correction, segment projection, snap gating, no-map fallback, error statistics, outage recovery metrics |
-| `test_scenarios.py` | full pipeline for all five scenarios + every route pattern, outage keeps navigating, spoof rejected, EKF vs baselines, map matching advisory |
+| `test_scenarios.py` | full pipeline for all five scenarios + every route pattern (incl. the street-graph route), outage keeps navigating, spoof rejected, EKF vs baselines, map matching advisory |
 | `test_api.py` | health/info, scenario catalogue, validation failures (422), full lifecycle (start → pause → resume → stop → reset), analytics, session retrieval (404 handling), WebSocket streaming |
+| `test_navigation_upgrades.py` | street-graph routes really follow the ways, simulator starts aligned with the route, map aiding is gated (never on a synthetic network, never while GNSS is trusted, discredit path), spatial index equals brute force, fixed-lag smoother scores its own timestamps and stays bounded, six-estimator report + deltas, dead map service degrades without raising |
 | `test_regression.py` | policy guards: ML layer stays opt-in, detection report is self-consistent, zero rejections on a clean run, EKF beats raw GNSS, outage frames carry no GNSS coordinates, drift correction suspended while GNSS is untrusted, run-to-run reproducibility |
 
 All tests use deterministic seeds and a temporary SQLite database.
@@ -484,23 +615,29 @@ All tests use deterministic seeds and a temporary SQLite database.
 1. **Simulated data only.** No receiver, IMU or CAN data is ingested; the physics
    is a kinematic model with noise and bias, not a hardware model.
 2. **Slow drift is the hardest case.** The detector flags it and stops trusting
-   the channel, but with only IMU/odometry remaining, the filtered solution can
-   still degrade to dead-reckoning accuracy (measured: EKF 25.9 m RMSE vs DR
-   32.0 m on the reference drift run). Absolute GNSS aiding (e.g. a trusted
-   external reference) would be required to do better; the platform does not
-   pretend otherwise.
+   the channel, but once the bias is accepted again the fused track follows it
+   (measured: EKF 26.5 m RMSE vs GNSS 21.4 m on the reference drift run). A slow
+   common-mode bias is not observable from inertial data alone, so no honest
+   filter can remove it; an external absolute reference would be required.
 3. **The ML correction layer does not currently help.** Its held-out evaluation
    is worse than the EKF baseline, so it is disabled by default.
 4. **Loose/loose-coupling only.** There is no tight coupling to raw GNSS
    observables (pseudoranges, Doppler), so no satellite-level fault detection.
 5. **2-D kinematics.** No vertical channel, heading from a magnetometer model, or
    wheel-slip/vehicle-dynamics model beyond the odometry blend.
-6. **Map matching is generic.** Default network is synthetic (derived from the
-   route); OSM mode is a nearest-segment matcher without HMM/topology inference,
-   and it never corrects the filter.
-7. **Single vehicle, single active run** — the state manager keeps one active run
+6. **Map matching is a nearest-segment matcher**, not a full HMM/topology
+   inference, so in dense parallel-road areas it can pick the wrong carriageway.
+   Map aiding is therefore gated, limited to surveyed OSM networks and
+   self-disabling when it disagrees with the receiver; its measured benefit is
+   small (§6) rather than a headline claim.
+7. **Online map data is optional.** Road geometry and basemap tiles are fetched
+   and cached on first use; with no network the dashboard falls back to its cache
+   or the offline graticule, and the simulator to a synthetic street lattice.
+8. **The RTS track is retrospective.** It lags the live solution by 4 s by design
+   and is not available for the first ~4 s of a run.
+9. **Single vehicle, single active run** — the state manager keeps one active run
    at a time (completed runs remain available for comparison).
-8. **Docker image was authored but not executed in this environment** (no Docker
+10. **Docker image was authored but not executed in this environment** (no Docker
    daemon available where the project was built); the local workflow, API,
    WebSocket, and full test suite were executed and verified.
 
@@ -526,18 +663,18 @@ grids/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py config.py
-│   │   ├── api/router.py + routes/{simulation,navigation,analytics,health,realtime}.py
+│   │   ├── api/router.py + routes/{simulation,navigation,analytics,map_data,health,realtime}.py
 │   │   ├── core/{simulator,coordinate_utils,state_manager}.py
-│   │   ├── algorithms/{dead_reckoning,ekf,gnss_anomaly,drift_correction,map_matching}.py
-│   │   ├── services/{navigation_service,simulation_service,analytics_service,osm_service}.py
+│   │   ├── algorithms/{dead_reckoning,ekf,smoother,gnss_anomaly,drift_correction,map_matching}.py
+│   │   ├── services/{navigation_service,simulation_service,analytics_service,map_data_service}.py
 │   │   ├── models/{schemas,database,database_setup}.py
 │   │   ├── ml/{model,inference,train}.py
 │   │   └── utils/{metrics,logging}.py
-│   ├── tests/                 (90 tests)
+│   ├── tests/                 (103 tests)
 │   ├── requirements.txt  Dockerfile
 ├── frontend/
 │   ├── src/
-│   │   ├── components/        (map, metrics, panels, controls, charts, analytics)
+│   │   ├── components/        (map, metrics, panels, controls, charts, analytics, settings)
 │   │   ├── hooks/useSimulationSocket.js
 │   │   ├── pages/Dashboard.jsx  services/api.js  utils/format.js
 │   ├── Dockerfile  nginx.conf  vite.config.js  tailwind.config.js

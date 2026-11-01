@@ -12,8 +12,10 @@ from app.utils.metrics import error_stats, outage_recovery_metrics
 ALGO_LABELS = {
     "gnss": "GNSS (raw)",
     "dead_reckoning": "Dead Reckoning",
-    "ekf": "EKF Fusion",
+    "ekf_nomap": "EKF (no map aiding)",
+    "ekf": "EKF Fusion (GRIDS)",
     "ekf_ml": "EKF + ML correction",
+    "rts_smoothed": "RTS smoothed (post-processed)",
 }
 
 
@@ -24,8 +26,10 @@ def _algo_metrics(frames: List[EngineFrame]) -> Dict[str, dict]:
     return {
         "gnss": error_stats(collect("gnss_error_m")).to_dict(),
         "dead_reckoning": error_stats(collect("dr_error_m")).to_dict(),
+        "ekf_nomap": error_stats(collect("nomap_error_m")).to_dict(),
         "ekf": error_stats(collect("ekf_error_m")).to_dict(),
         "ekf_ml": error_stats(collect("ml_error_m")).to_dict(),
+        "rts_smoothed": error_stats(collect("sm_error_m")).to_dict(),
     }
 
 
@@ -78,6 +82,8 @@ def compare_report(
     ekf_rmse = algorithms["ekf"]["rmse_m"]
     gnss_rmse = algorithms["gnss"]["rmse_m"]
     ml_rmse = algorithms["ekf_ml"]["rmse_m"]
+    nomap_rmse = algorithms["ekf_nomap"]["rmse_m"]
+    sm_rmse = algorithms["rts_smoothed"]["rmse_m"]
 
     return {
         "session_id": session_id,
@@ -99,6 +105,8 @@ def compare_report(
             "ekf_vs_gnss_rmse_m": round(gnss_rmse - ekf_rmse, 3) if gnss_rmse else 0.0,
             "ekf_vs_dr_rmse_m": round(dr_rmse - ekf_rmse, 3),
             "ml_vs_ekf_rmse_m": round(ekf_rmse - ml_rmse, 3) if ml_rmse else None,
+            "map_vs_nomap_rmse_m": round(nomap_rmse - ekf_rmse, 3) if nomap_rmse else None,
+            "smoothing_vs_ekf_rmse_m": round(ekf_rmse - sm_rmse, 3) if sm_rmse else None,
         },
         "notes": notes,
     }
@@ -120,6 +128,8 @@ def timeseries_for_charts(frames: List[EngineFrame], max_points: int = 600) -> L
                 "dr_error_m": round(f.dr_error_m, 2),
                 "gnss_error_m": None if f.gnss_error_m is None else round(f.gnss_error_m, 2),
                 "ml_error_m": None if f.ml_error_m is None else round(f.ml_error_m, 2),
+                "sm_error_m": None if f.sm_error_m is None else round(f.sm_error_m, 2),
+                "nomap_error_m": None if f.nomap_error_m is None else round(f.nomap_error_m, 2),
                 "gnss_residual_m": None if f.gnss_residual_m is None else round(f.gnss_residual_m, 2),
                 "speed_ms": round(f.speed, 2),
                 "drift_m": round(f.drift_estimate_m, 2),
@@ -149,6 +159,7 @@ def live_summary(frames: List[EngineFrame]) -> dict:
     return {
         "samples": len(frames),
         "ekf_rmse_m": round(error_stats([f.ekf_error_m for f in frames]).rmse_m, 3),
+        "smoothed_rmse_m": round(error_stats([f.sm_error_m for f in frames]).rmse_m, 3),
         "dr_rmse_m": round(error_stats([f.dr_error_m for f in frames]).rmse_m, 3),
         "gnss_rmse_m": round(error_stats([f.gnss_error_m for f in frames]).rmse_m, 3),
         "max_ekf_error_m": round(max(f.ekf_error_m for f in frames), 3),
