@@ -7,8 +7,12 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.router import api_router
 from app.config import settings
@@ -54,6 +58,31 @@ app.add_middleware(
 
 app.include_router(api_router, prefix=settings.api_prefix)
 
+# ---------------------------------------------------------------------------
+# Dashboard hosting.
+#
+# The API is the canonical port, so if a production bundle has been built
+# (`npm run build` -> frontend/dist) it is served from here as well: one origin,
+# no proxy required, relative /api calls keep working. During development the
+# Vite dev server on :5173 proxies /api to this process instead.
+# ---------------------------------------------------------------------------
+_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+_INDEX = _DIST / "index.html"
+
+@app.get("/dashboard", include_in_schema=False)
+def dashboard() -> FileResponse:
+    """Serve the built single-page app (falls back to a hint if not built)."""
+    if _INDEX.is_file():
+        return FileResponse(_INDEX)
+    return JSONResponse(
+        status_code=404,
+        content={
+            "error": "dashboard bundle not found",
+            "build": "cd frontend && npm run build",
+            "dev_server": "http://localhost:5173",
+        },
+    )
+
 
 @app.get("/", tags=["system"])
 def root() -> dict:
@@ -63,5 +92,13 @@ def root() -> dict:
         "version": settings.version,
         "docs": "/docs",
         "api": settings.api_prefix,
+        "dashboard": "/dashboard" if _INDEX.is_file() else None,
         "data_source": "simulated",
     }
+
+
+# Registered last on purpose: a mount on "/" is matched in definition order, so
+# it must come after every API, docs and page route. html=False keeps unknown
+# paths a plain 404 instead of silently answering with the SPA shell.
+if _DIST.is_dir():
+    app.mount("/", StaticFiles(directory=_DIST, html=False), name="dashboard-assets")

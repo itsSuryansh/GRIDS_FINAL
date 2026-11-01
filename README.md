@@ -640,6 +640,18 @@ It drives the real dashboard: load, start/pause/resume, all five chart tabs, map
 layers, the system drawer, stop-and-score, the analytics page, loading a stored
 session, and a spoofing run — failing on any JavaScript error.
 
+If a production bundle exists (`cd frontend && npm run build`), the backend also
+serves the dashboard itself, so a single port is enough:
+
+```bash
+cd backend && python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+# dashboard → http://localhost:8000/dashboard     (SPA + static assets, same origin)
+# API docs  → http://localhost:8000/docs
+# JSON index → http://localhost:8000/
+```
+
+Relative `/api` calls work either way, so nothing needs configuring.
+
 Regenerate the documentation screenshots from the live app (same ports):
 
 ```bash
