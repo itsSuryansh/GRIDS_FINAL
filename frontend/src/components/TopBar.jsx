@@ -51,23 +51,14 @@ export default function TopBar({
         >
           <PanelLeftClose size={15} className={sidebarOpen ? '' : 'rotate-180'} />
         </button>
-        {/* brand lockup: satellite-globe symbol + heavy wordmark + descriptor */}
-        <img
-          src="/grids-symbol.svg"
-          alt="GRIDS"
-          width={38}
-          height={24}
-          className="shrink-0 -ml-0.5"
-        />
-        <div className="min-w-0">
-          <div className="flex items-baseline gap-[9px] leading-none">
-            <span className="brand-wordmark text-[16px] leading-none">GRIDS</span>
-            <span className="hidden xl:inline text-[8.5px] font-bold uppercase tracking-[0.15em] text-blue-600/80 leading-none">
-              resilient positioning
-            </span>
-          </div>
-          <div className="text-[9.5px] text-slate-400 mt-[4px] leading-none tracking-[-0.005em] hidden sm:block">
-            GNSS-Resilient Intelligent Dead Reckoning System
+        {/* brand lockup: supplied artwork, used as-is */}
+        <div className="flex items-center gap-2 min-w-0 select-none" aria-label="GRIDS">
+          <img src="/grids-mark.png" alt="" width={60} height={20} className="shrink-0 block" />
+          <div className="min-w-0">
+            <img src="/grids-wordmark.png" alt="GRIDS" height={24} className="block h-[24px] w-auto" />
+            <div className="hidden md:block text-[9.5px] text-slate-400 mt-[2px] leading-none tracking-[0.015em] whitespace-nowrap">
+              GNSS-Resilient Intelligent Dead Reckoning System
+            </div>
           </div>
         </div>
       </div>
