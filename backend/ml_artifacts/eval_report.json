@@ -1,0 +1,44 @@
+{
+  "generated_at": "2026-11-01T13:44:34Z",
+  "model": "grids_ml_correction",
+  "estimator": "GradientBoostingRegressor (multi-output)",
+  "features": [
+    "innovation_e",
+    "innovation_n",
+    "gnss_available",
+    "nis",
+    "uncertainty_m",
+    "speed",
+    "abs_yaw_rate",
+    "time_since_gnss",
+    "residual_m",
+    "rejected",
+    "anomaly_score"
+  ],
+  "training_sessions": 6,
+  "training_samples": 4800,
+  "test_sessions": 3,
+  "test_samples": 2400,
+  "baseline_ekf": {
+    "rmse_m": 8.439,
+    "mae_m": 4.521,
+    "p95_m": 21.689,
+    "max_m": 27.561,
+    "samples": 2400
+  },
+  "corrected": {
+    "rmse_m": 10.04,
+    "mae_m": 5.036,
+    "p95_m": 24.812,
+    "max_m": 35.16,
+    "samples": 2400
+  },
+  "rmse_improvement_m": -1.601,
+  "recommended_default": false,
+  "notes": [
+    "Evaluated on held-out simulated sessions with unseen random seeds.",
+    "A positive improvement means the ML layer reduced horizontal RMSE on those simulated sessions only.",
+    "This is an experimental add-on: the EKF remains the baseline and the correction is disabled unless it demonstrably helps."
+  ],
+  "train_wall_s": 13.6
+}

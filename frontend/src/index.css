@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Leaflet base styles are imported from the JS entry (vite handles the css) */
+
+:root {
+  color-scheme: light;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  @apply bg-navy-50 text-navy-900 antialiased;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* ---------------- scrollbars ---------------- */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #c3cfe4; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #93a8cd; }
+
+@layer components {
+  .panel {
+    @apply bg-white border border-navy-100 rounded-md shadow-card;
+  }
+  .panel-header {
+    @apply flex items-center justify-between gap-3 px-4 py-2.5 border-b border-navy-100;
+  }
+  .panel-title {
+    @apply text-[13px] font-semibold tracking-wide text-navy-800 uppercase;
+  }
+  .metric-label {
+    @apply text-2xs uppercase tracking-wider text-navy-400 font-medium;
+  }
+  .metric-value {
+    @apply font-mono text-navy-900 tabular-nums;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded px-3 py-1.5 text-xs font-semibold
+           transition-colors duration-100 disabled:opacity-40 disabled:cursor-not-allowed
+           focus:outline-none focus-visible:ring-2 focus-visible:ring-sig-blue/40;
+  }
+  .btn-primary {
+    @apply btn bg-sig-blue text-white hover:bg-blue-800;
+  }
+  .btn-secondary {
+    @apply btn bg-white text-navy-800 border border-navy-200 hover:bg-navy-50;
+  }
+  .btn-danger {
+    @apply btn bg-white text-sig-red border border-red-200 hover:bg-red-50;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-semibold
+           uppercase tracking-wide;
+  }
+  .field-label {
+    @apply block text-2xs font-semibold uppercase tracking-wider text-navy-500 mb-1;
+  }
+  .field-input {
+    @apply w-full rounded border border-navy-200 bg-white px-2 py-1.5 text-xs text-navy-900
+           font-mono tabular-nums focus:border-sig-blue focus:outline-none focus:ring-1 focus:ring-sig-blue/30;
+  }
+  .tab {
+    @apply px-3 py-1.5 text-xs font-semibold rounded border border-transparent text-navy-500 hover:text-navy-800;
+  }
+  .tab-active {
+    @apply bg-white border-navy-200 text-navy-900 shadow-card;
+  }
+}
+
+/* ---------------- leaflet overrides (light, technical look) ---------------- */
+.leaflet-container {
+  background: #eef2f8;
+  font-family: inherit;
+  font-size: 11px;
+}
+.leaflet-control-attribution {
+  font-size: 9px !important;
+  background: rgba(255, 255, 255, 0.8) !important;
+}
+.leaflet-bar a {
+  color: #1b2b4d !important;
+}
+.leaflet-popup-content-wrapper {
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+/* pseudo-GNSS marker: no animation, precise */
+.vehicle-marker {
+  background: transparent;
+  border: none;
+}

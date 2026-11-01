@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+node_modules/
+dist/
+.vite/
+.env
+*.db
+*.db-wal
+*.db-shm
+backend/data/
+backend/ml_artifacts/*.joblib
+.DS_Store
