@@ -76,7 +76,7 @@ function Trend({ label, value, unit, sub, tone = 'default', icon: Icon, spark = 
           </span>
         ) : null}
         <div className="min-w-0 flex-1">
-          <div className="metric-label truncate">{label}</div>
+          <div className="metric-label truncate" title={label}>{label}</div>
           <div className="flex items-baseline gap-1">
             <span className={`font-mono font-semibold text-[19px] leading-[1.15] tracking-[-0.02em] tabular-nums ${palette.text} truncate`}>
               {value}
@@ -449,7 +449,7 @@ export default function Dashboard() {
 
       <div className="flex-1 flex min-h-0">
         {sidebarOpen && (
-          <aside className="w-[292px] shrink-0 border-r border-slate-200 bg-white flex flex-col min-h-0">
+          <aside className="w-[264px] xl:w-[292px] shrink-0 border-r border-slate-200 bg-white flex flex-col min-h-0">
             <SimulationControls
               config={config}
               setConfig={setConfig}
@@ -478,19 +478,19 @@ export default function Dashboard() {
         )}
 
         <main className="flex-1 min-w-0 flex flex-col">
-          <div className="h-11 shrink-0 border-b border-slate-200/90 bg-white/80 backdrop-blur-sm flex items-center px-2 gap-1">
-            <button onClick={() => setTab('dashboard')} className={`tab flex items-center gap-1.5 ${tab === 'dashboard' ? 'tab-active' : ''}`}>
+          <div className="h-11 shrink-0 border-b border-slate-200/90 bg-white/80 backdrop-blur-sm flex items-center px-2 gap-1 overflow-hidden">
+            <button onClick={() => setTab('dashboard')} className={`tab shrink-0 flex items-center gap-1.5 ${tab === 'dashboard' ? 'tab-active' : ''}`}>
               <LayoutDashboard size={12.5} strokeWidth={2.3} /> Operations
             </button>
-            <button onClick={() => setTab('analytics')} className={`tab flex items-center gap-1.5 ${tab === 'analytics' ? 'tab-active' : ''}`}>
+            <button onClick={() => setTab('analytics')} className={`tab shrink-0 flex items-center gap-1.5 ${tab === 'analytics' ? 'tab-active' : ''}`}>
               <BarChart3 size={12.5} strokeWidth={2.3} /> Analytics & sessions
             </button>
-            <div className="ml-auto flex items-center gap-3 pr-1 text-2xs text-slate-500">
+            <div className="ml-auto flex items-center gap-3 pr-1 text-2xs text-slate-500 min-w-0 overflow-hidden whitespace-nowrap">
               {frame?.modules?.gnss ? (
-                <span className="inline-flex items-center gap-1"><Radio size={10} /> GNSS {frame.modules.gnss}</span>
+                <span className="hidden xl:inline-flex items-center gap-1"><Radio size={10} /> GNSS {frame.modules.gnss}</span>
               ) : null}
               {report ? (
-                <span className="inline-flex items-center gap-1 text-emerald-700 font-medium">
+                <span className="hidden lg:inline-flex items-center gap-1 text-emerald-700 font-medium truncate">
                   <Zap size={10} /> report ready · EKF {report.algorithms?.ekf?.rmse_m?.toFixed(2)} m RMSE
                 </span>
               ) : null}

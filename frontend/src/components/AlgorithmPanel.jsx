@@ -40,7 +40,7 @@ export default function AlgorithmPanel({ frame, mlEnabled }) {
   const mods = frame?.modules || {}
   return (
     <Panel title="Algorithm chain" icon={Cpu} subtitle="eight stages · live state">
-      <div className="grid grid-cols-2 gap-x-3 gap-y-[5px]">
+      <div className="grid grid-cols-1 min-[1440px]:grid-cols-2 gap-x-4 gap-y-[6px]">
         {MODULES.map((m) => {
           const state = mods[m.key] || 'idle'
           const style = MODULE_STYLES[state] || MODULE_STYLES.idle
