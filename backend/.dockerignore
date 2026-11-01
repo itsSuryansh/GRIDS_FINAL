@@ -1,6 +1,0 @@
-__pycache__/
-*.pyc
-data/
-ml_artifacts/
-.pytest_cache/
-.venv/

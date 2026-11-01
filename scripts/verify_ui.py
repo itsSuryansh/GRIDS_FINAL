@@ -81,6 +81,29 @@ async def main():
         await pg.wait_for_timeout(2000)
         ok("stored session loads", "session #" in (await pg.inner_text("main")).lower())
 
+        # multi-scenario sweep: run all five scenarios headlessly from the UI.
+        # These two checks depend only on the sweep's own files, so they run
+        # before the long interactive sequence above (which leaves ~65 s of
+        # simulation time on the header clock and would eat the poll window).
+        await pg.click("button:has-text('Analytics & sessions')")
+        await pg.wait_for_timeout(1500)
+        await pg.click("button:has-text('Run 5 scenarios')")
+        sweep = ""
+        for _ in range(180):
+            await pg.wait_for_timeout(1000)
+            sweep = await pg.inner_text("main")
+            if "GNSS spoofing" in sweep and "lower error" in sweep.lower():
+                break
+        await pg.screenshot(path="docs/images/dashboard-sweep.png")
+        ok("multi-scenario sweep runs all five", all(
+            name in sweep for name in
+            ["Normal navigation", "GNSS outage", "GNSS drift", "GNSS spoofing", "Complex movement"]
+        ))
+        # the header row is uppercased by CSS, so compare case-insensitively
+        low = sweep.lower()
+        ok("sweep reports per-estimator RMSE and EKF gain",
+           "ekf vs gnss" in low and ("lower error" in low or "higher error" in low))
+
         # scenarios catalogue: switch to spoofing and run briefly
         await pg.click("button:has-text('Operations')")
         await pg.wait_for_timeout(800)
@@ -94,6 +117,11 @@ async def main():
         await pg.wait_for_timeout(3000)
 
         await pg.screenshot(path="docs/images/dashboard-final.png")
+        ok("multi-scenario sweep runs all five", all(
+            name in sweep for name in
+            ["Normal navigation", "GNSS outage", "GNSS drift", "GNSS spoofing", "Complex movement"]
+        ))
+        ok("sweep reports per-estimator RMSE and EKF gain", "ekf vs gnss" in sweep.lower())
         ok("no JS errors during the whole session", not errs, str(errs[:3]))
         await b.close()
 

@@ -128,7 +128,7 @@ requires-python = ">=3.12"
 Expect cold starts of a few seconds (numpy/scipy import), executions capped by the
 plan's function duration, and no shared state across instances.
 
-## Local: three ways, pick one
+## Local: two ways to serve it, plus a benchmark
 
 ```bash
 # 0. once
@@ -156,11 +156,10 @@ cd ../backend && python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 # API docs  → http://localhost:8000/docs
 ```
 
-**3. Docker Compose**
+**3. Batch benchmark (no UI)**
 
 ```bash
-cp .env.example .env
-docker compose up --build           # dashboard :5173, API :8000
+python scripts/run_scenarios.py --duration 120 --seed 42   # RMSE table per scenario
 ```
 
 ### Checks before you announce anything
@@ -181,3 +180,4 @@ python scripts/verify_ui.py                        # 19 headless-browser checks
 | Sessions disappear after a restart | No persistent volume for SQLite | Mount a volume at `/data` and set `GRIDS_DATABASE_URL` to it |
 | Map is blank, everything else works | Tiles/roads not fetched and `GRIDS_MAP_ONLINE=0` | Set `GRIDS_MAP_ONLINE=1` and click *Cache tiles* once, or accept the offline graticule |
 | First request takes ~5 s | Cold start (numpy/scipy) | Normal on serverless; use an always-on host for demos |
+| A multi-scenario sweep 504s | A sweep is CPU work on the API box (5 runs × 45 s ≈ 6 s of wall time here, longer on a small instance) | Use `/api/batch/status` polling with a small plan, or lower `durations_s`; the endpoint caps at 40 runs / 300 s per run |

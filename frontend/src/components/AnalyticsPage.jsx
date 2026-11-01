@@ -8,6 +8,7 @@ import {
   TrendingDown, MapPinned, Waves, Info,
 } from 'lucide-react'
 import api from '../services/api'
+import BatchPanel from './BatchPanel'
 import { COLORS, ALGO_META, fixed } from '../utils/format'
 
 function Stat({ label, value, unit, tone = '', hint }) {
@@ -329,6 +330,8 @@ export default function AnalyticsPage({ liveReport }) {
           </div>
         </>
       )}
+
+      <BatchPanel />
 
       <div className="panel">
         <div className="panel-header">

@@ -79,7 +79,6 @@ is allowed to influence the estimate.
 | Real-time WebSocket stream + REST API | ✅ | Socket is a pure subscriber; no duplicate loops |
 | Performance analytics vs ground truth | ✅ | MAE, RMSE, mean, max, P95, outage recovery |
 | SQLite persistence (sessions, results, metrics, anomalies) | ✅ | Batched writes, not row-by-row |
-| Docker Compose deployment | ✅ provided | See §11 |
 | Real hardware / real receivers / IMU drivers | ❌ out of scope | No hardware is required anywhere |
 
 ---
@@ -142,7 +141,7 @@ Recharts 2, Lucide icons.
 scikit-learn, SQLAlchemy 2, native WebSockets.
 **Storage** SQLite.
 **ML** scikit-learn (`GradientBoostingRegressor`, multi-output), joblib.
-**Infra** Docker, Docker Compose, Python virtualenv, Git.
+**Infra** Python virtualenv, Node 18+, Git.
 
 No external service is required for any core function: the simulator, the filters,
 the detector, persistence and every chart work offline. OpenStreetMap road geometry
@@ -421,6 +420,9 @@ Interactive documentation: `http://localhost:8000/docs`.
 | GET | `/api/health` | liveness + DB check |
 | GET | `/api/system/info` | capabilities, limits, data-provenance disclaimer |
 | GET | `/api/simulation/scenarios` | ready-to-run scenarios + defaults |
+| POST | `/api/batch/run` | run several scenarios headlessly, return the comparison |
+| GET | `/api/batch/status` | sweep progress + per-scenario results |
+| POST | `/api/batch/cancel` | stop a sweep after the run in flight |
 | GET | `/api/simulation/patterns` | available movement patterns |
 | GET | `/api/simulation/status` | state, progress, active config |
 | POST | `/api/simulation/start` | start a run (validated `SimulatorConfig`) |
@@ -476,6 +478,20 @@ Custom route example:
 
 Scenario 5 is exposed as `scenario: "complex"` and automatically uses the random
 route pattern.
+
+**Running more than one.** `POST /api/batch/run` executes any subset of the five
+back to back — headless, one navigation engine per run, scored against the same
+simulated ground truth — and returns mean RMSE per estimator, the spread across
+seeds and the EKF-vs-GNSS improvement. The same sweep is driven from the
+dashboard (Analytics → *Multi-scenario sweep*). The API caps a sweep at 40 runs
+and 300 s per run, yields to the event loop between runs, and can be cancelled.
+
+```bash
+curl -X POST http://localhost:8000/api/batch/run -H 'Content-Type: application/json' -d '{
+  "scenarios": ["normal","outage","drift","spoofing","complex"],
+  "durations_s": [45], "seeds": [42]
+}'
+```
 
 **Route patterns** (independent of the scenario): `road` (default — follows the
 street graph), `straight`, `left_turn`, `right_turn`, `curved`, `random`, `custom`
@@ -552,6 +568,11 @@ ad-hoc classes:
 * Outage-recovery panel (peak error, error at outage end, drift rate, recovery time).
 * Measured ML evaluation panel.
 * Stored-session archive in SQLite; click any row to load that run's report.
+* **Multi-scenario sweep** — tick any of the five scenarios (plus duration and one
+  or more seeds), press *Run* and the backend executes them headlessly, one
+  engine per run, and returns mean RMSE per estimator with the spread across
+  seeds and the EKF-vs-GNSS improvement. It runs beside the live simulation, so a
+  sweep never interrupts the dashboard.
 
 ![GRIDS analytics view](docs/images/dashboard-analytics.png)
 
@@ -574,7 +595,7 @@ basemap before the run starts; controls, KPIs and diagnostics are all live.*
 ## 10. Deployment
 
 See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** for the full guide: running
-locally (dev server, single port, Docker), publishing the dashboard on Vercel, and
+locally (dev server or a single port), publishing the dashboard on Vercel, and
 putting the stateful API on a host that keeps a process, a WebSocket and a disk
 alive. Short version:
 
@@ -620,24 +641,8 @@ python scripts/run_scenarios.py --duration 120 --seed 42 --persist
 
 ---
 
-## 12. Docker execution
 
-```bash
-cp .env.example .env
-docker compose up --build
-# dashboard  → http://localhost:5173
-# API docs   → http://localhost:8000/docs
-docker compose down          # add -v to drop the SQLite volume
-```
-
-* `backend` runs Uvicorn on **8000**, exposes `/api/health` as a healthcheck.
-* `frontend` builds the Vite bundle and serves it through Nginx on **5173**,
-  proxying `/api/*` (and the WebSocket) to `backend:8000` — no hardcoded URLs.
-* Named volumes persist `grids_data` (SQLite) and `grids_ml` (model artifacts).
-
----
-
-## 13. Testing
+## 12. Testing
 
 ```bash
 cd backend
@@ -692,7 +697,7 @@ All tests use deterministic seeds and a temporary SQLite database.
 
 ---
 
-## 14. Known limitations
+## 13. Known limitations
 
 1. **Simulated data only.** No receiver, IMU or CAN data is ingested; the physics
    is a kinematic model with noise and bias, not a hardware model.
@@ -719,13 +724,12 @@ All tests use deterministic seeds and a temporary SQLite database.
    and is not available for the first ~4 s of a run.
 9. **Single vehicle, single active run** — the state manager keeps one active run
    at a time (completed runs remain available for comparison).
-10. **Docker image was authored but not executed in this environment** (no Docker
    daemon available where the project was built); the local workflow, API,
    WebSocket, and full test suite were executed and verified.
 
 ---
 
-## 15. Future improvements
+## 14. Future improvements
 
 * Tight coupling with raw GNSS measurements and RAIM-style satellite-level checks.
 * IMM/UKF variants for aggressive manoeuvres; 3-D state with a barometer.
@@ -738,29 +742,26 @@ All tests use deterministic seeds and a temporary SQLite database.
 
 ---
 
-## 16. Repository layout
+---
 
-```
+## 15. Repository layout
+
+```text
 grids/
-├── backend/
-│   ├── app/
-│   │   ├── main.py config.py
-│   │   ├── api/router.py + routes/{simulation,navigation,analytics,map_data,health,realtime}.py
-│   │   ├── core/{simulator,coordinate_utils,state_manager}.py
-│   │   ├── algorithms/{dead_reckoning,ekf,smoother,gnss_anomaly,drift_correction,map_matching}.py
-│   │   ├── services/{navigation_service,simulation_service,analytics_service,map_data_service}.py
-│   │   ├── models/{schemas,database,database_setup}.py
-│   │   ├── ml/{model,inference,train}.py
-│   │   └── utils/{metrics,logging}.py
-│   ├── tests/                 (103 tests)
-│   ├── requirements.txt  Dockerfile
-├── frontend/
-│   ├── src/
-│   │   ├── components/        (map, metrics, panels, controls, charts, analytics, settings)
-│   │   ├── hooks/useSimulationSocket.js
-│   │   ├── pages/Dashboard.jsx  services/api.js  utils/format.js
-│   ├── Dockerfile  nginx.conf  vite.config.js  tailwind.config.js
-├── scripts/{run_scenarios.py,verify_ui.py}
-├── docs/{ARCHITECTURE.md,images/}
-├── docker-compose.yml  .env.example  README.md
+├── backend/                  FastAPI service (app/ + 103 tests + data/)
+│   ├── app/api/               REST + WebSocket routes
+│   ├── app/core/              simulator, coordinate math, run registry
+│   ├── app/algorithms/        dead reckoning, EKF, anomaly, drift, map matching, smoother
+│   ├── app/services/          navigation, simulation driver, analytics, map data
+│   ├── app/ml/                optional drift-correction model + training
+│   └── data/                  SQLite DB, cached OSM tiles and road geometry (git-ignored)
+├── frontend/                 Vite + React dashboard
+│   ├── src/components/        panels, map, charts, analytics, controls
+│   ├── src/pages/             dashboard shell
+│   └── public/                served assets + logo
+├── scripts/                  verify_ui.py, capture_screens.py, run_scenarios.py
+├── docs/                     DEPLOYMENT.md, brand/, images/
+├── api/index.py              Vercel Python entrypoint (optional)
+├── vercel.json               Vercel build + /api rewrite
+└── README.md
 ```

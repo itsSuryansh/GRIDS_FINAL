@@ -54,6 +54,10 @@ export const api = {
   session: (id) => request(`/analytics/sessions/${id}`),
   wsStatus: () => request('/ws/status'),
 
+  batchStatus: () => request('/batch/status'),
+  batchRun: (plan) => request('/batch/run', { method: 'POST', body: JSON.stringify(plan) }),
+  batchCancel: () => request('/batch/cancel', { method: 'POST' }),
+
   mapStatus: () => request('/map/status'),
   mapRoads: (lat, lon, radius = 1500) =>
     request(`/map/roads?lat=${lat}&lon=${lon}&radius_m=${radius}`),
