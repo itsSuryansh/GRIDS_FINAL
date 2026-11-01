@@ -14,27 +14,53 @@ const MODULES = [
   { key: 'smoothing', label: 'RTS smoothing', desc: 'fixed-lag retrospective track' },
 ]
 
+const MODULE_TEXT = {
+  active: 'text-emerald-600',
+  coasting: 'text-sky-600',
+  degraded: 'text-amber-600',
+  alert: 'text-red-600',
+  rejected: 'text-red-600',
+  unavailable: 'text-slate-400',
+  idle: 'text-slate-400',
+  off: 'text-slate-400',
+  'n/a': 'text-slate-300',
+}
+
+const DOT = {
+  active: 'bg-emerald-500',
+  coasting: 'bg-sky-500',
+  degraded: 'bg-amber-500',
+  alert: 'bg-red-500',
+  unavailable: 'bg-slate-300',
+  idle: 'bg-slate-300',
+  'n/a': 'bg-slate-200',
+}
+
 export default function AlgorithmPanel({ frame, mlEnabled }) {
   const mods = frame?.modules || {}
   return (
-    <Panel title="Algorithm chain" icon={Cpu} subtitle="live operational status of every stage">
-      <div className="grid grid-cols-1 gap-y-[3px]">
+    <Panel title="Algorithm chain" icon={Cpu} subtitle="eight stages · live state">
+      <div className="grid grid-cols-2 gap-x-3 gap-y-[5px]">
         {MODULES.map((m) => {
           const state = mods[m.key] || 'idle'
           const style = MODULE_STYLES[state] || MODULE_STYLES.idle
+          const dot = DOT[state.split(' ')[0]] || 'bg-slate-300'
           return (
-            <div key={m.key} className="flex items-center justify-between gap-2 py-[1px]" title={m.desc}>
-              <div className="min-w-0">
-                <div className="text-[11.5px] font-medium text-slate-800 truncate leading-tight">{m.label}</div>
-              </div>
-              <span className={`chip shrink-0 border ${style}`}>{state}</span>
+            <div key={m.key} className="flex items-center gap-1.5 min-w-0" title={`${m.label} — ${m.desc}: ${state}`}>
+              <span className={`h-[6px] w-[6px] rounded-full shrink-0 ${dot} ${state === 'active' ? 'animate-pulse' : ''}`} />
+              <span className="text-[10.5px] text-slate-700 truncate leading-tight">{m.label}</span>
+              <span className={`ml-auto text-[8.5px] uppercase tracking-[0.04em] font-bold shrink-0 ${
+                MODULE_TEXT[state.split(' ')[0]] || 'text-slate-400'
+              }`}>
+                {state.split(' ')[0]}
+              </span>
             </div>
           )
         })}
       </div>
-      <div className="mt-1.5 pt-1.5 border-t border-slate-200/70 text-3xs text-slate-400 leading-snug">
-        ML correction {mlEnabled ? 'enabled for this run' : 'disabled'} · map aiding is gated and never
-        overrides the filter.
+      <div className="mt-2 pt-1.5 border-t border-slate-100 flex items-center gap-1.5 text-[9px] text-slate-400 leading-tight">
+        <span className={`h-[6px] w-[6px] rounded-full ${mlEnabled ? 'bg-violet-500' : 'bg-slate-300'}`} />
+        ML correction {mlEnabled ? 'enabled' : 'disabled'} · aiding is gated and never overrides the filter
       </div>
     </Panel>
   )

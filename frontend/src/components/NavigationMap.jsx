@@ -32,17 +32,23 @@ import api from '../services/api'
 
 function vehicleIcon(headingDeg, status) {
   const h = Number(headingDeg || 0)
-  const accent = status === 'suspicious' ? '#dc2626' : status === 'unavailable' ? '#64748b' : '#1d4ed8'
+  const accent = status === 'suspicious' ? '#dc2626' : status === 'unavailable' ? '#475569' : '#1d4ed8'
   return L.divIcon({
     className: 'vehicle-marker',
-    iconSize: [30, 30],
-    iconAnchor: [15, 15],
+    iconSize: [56, 56],
+    iconAnchor: [28, 28],
     html: `
-      <div style="position:relative;width:30px;height:30px;">
-        <div style="position:absolute;inset:0;border-radius:50%;background:${accent}1f;border:1.5px solid ${accent}88"></div>
-        <div style="position:absolute;left:13.5px;top:13.5px;width:3px;height:3px;border-radius:50%;background:${accent}"></div>
-        <div style="position:absolute;left:14.5px;top:13px;width:12px;height:2px;background:${accent};
-                    transform-origin:1px 1px;transform:rotate(${h - 90}deg);border-radius:1px"></div>
+      <div style="position:relative;width:56px;height:56px;">
+        <div style="position:absolute;inset:8px;border-radius:50%;background:${accent}12"></div>
+        <div style="position:absolute;inset:8px;border-radius:50%;border:1px solid ${accent}45"></div>
+        <div style="position:absolute;left:28px;top:8px;width:0;height:0;transform-origin:0 20px;transform:rotate(${h}deg);">
+          <div style="position:absolute;left:-13px;top:-16px;width:26px;height:22px;
+                      background:linear-gradient(180deg, ${accent}66 0%, ${accent}00 100%);
+                      clip-path:polygon(50% 0%, 100% 100%, 0% 100%);"></div>
+        </div>
+        <div style="position:absolute;left:22px;top:22px;width:12px;height:12px;border-radius:50%;
+                    background:#fff;border:2.5px solid ${accent};
+                    box-shadow:0 1px 4px rgba(15,23,42,0.35);"></div>
       </div>`,
   })
 }
@@ -63,6 +69,30 @@ function FollowController({ position, follow }) {
     if (follow && position) map.setView(position, map.getZoom(), { animate: true })
   }, [follow, position, map])
   return null
+}
+
+/** Small badge shown when the pointer is over the map: wheel zoom is off here. */
+function WheelHint() {
+  const map = useMap()
+  const [hover, setHover] = useState(false)
+  useEffect(() => {
+    const el = map.getContainer()
+    const enter = () => setHover(true)
+    const leave = () => setHover(false)
+    el.addEventListener('mouseenter', enter)
+    el.addEventListener('mouseleave', leave)
+    return () => {
+      el.removeEventListener('mouseenter', enter)
+      el.removeEventListener('mouseleave', leave)
+    }
+  }, [map])
+  if (!hover) return null
+  return (
+    <div className="leaflet-control absolute bottom-3 left-1/2 -translate-x-1/2 z-[600] pointer-events-none
+                    bg-slate-900/80 text-white text-[9.5px] rounded-full px-2.5 py-[3px]">
+      wheel zoom off · expand for full-screen navigation
+    </div>
+  )
 }
 
 function FitOnce({ boundsKey, points }) {
@@ -124,7 +154,7 @@ function LayerToggle({ on, color, label, dashed, onClick, value, dot }) {
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-1.5 w-full px-1.5 py-[3px] rounded hover:bg-slate-100 text-left ${on ? '' : 'opacity-40'}`}
+      className={`flex items-center gap-1.5 w-full px-1.5 py-[3.5px] rounded-md hover:bg-slate-100/80 transition-colors text-left ${on ? '' : 'opacity-35'}`}
       title={`Toggle ${label}`}
     >
       {dot ? (
@@ -137,8 +167,8 @@ function LayerToggle({ on, color, label, dashed, onClick, value, dot }) {
           }}
         />
       )}
-      <span className="text-2xs text-slate-700 flex-1 truncate">{label}</span>
-      {value ? <span className="font-mono text-3xs text-slate-500 tabular-nums">{value}</span> : null}
+      <span className="text-[10.5px] text-slate-700 flex-1 truncate leading-tight">{label}</span>
+      {value ? <span className="font-mono text-[9px] text-slate-500 tabular-nums">{value}</span> : null}
     </button>
   )
 }
@@ -242,29 +272,37 @@ export default function NavigationMap({
       actions={
         <>
           <span className="hidden lg:inline text-2xs text-slate-400 font-mono">{trail.length} pts</span>
-          <div className="flex rounded-md border border-slate-300 overflow-hidden">
+          <div className="flex rounded-lg border border-slate-300/90 bg-slate-50 p-[2px] gap-[2px]">
             <button
               onClick={() => setBasemap('tiles')}
-              className={`px-1.5 py-1 ${basemap === 'tiles' ? 'bg-slate-100 text-slate-800' : 'text-slate-400'}`}
+              className={`grid place-items-center h-[23px] w-[23px] rounded-md transition-colors ${
+                basemap === 'tiles' ? 'bg-white text-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.12)]' : 'text-slate-400 hover:text-slate-600'
+              }`}
               title="Map tiles (cached by the backend)"
             >
-              <Globe size={12} />
+              <Globe size={11.5} />
             </button>
             <button
               onClick={() => setBasemap('grid')}
-              className={`px-1.5 py-1 border-l border-slate-300 ${basemap === 'grid' ? 'bg-slate-100 text-slate-800' : 'text-slate-400'}`}
+              className={`grid place-items-center h-[23px] w-[23px] rounded-md transition-colors ${
+                basemap === 'grid' ? 'bg-white text-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.12)]' : 'text-slate-400 hover:text-slate-600'
+              }`}
               title="Offline metric grid"
             >
-              <Grid3x3 size={12} />
+              <Grid3x3 size={11.5} />
             </button>
           </div>
-          <button className="btn-secondary !px-2 !py-1" onClick={doPrefetch} disabled={prefetching} title="Cache map tiles for offline use">
+          <button className="icon-btn" onClick={doPrefetch} disabled={prefetching} title="Cache map tiles for offline use">
             <Download size={12} className={prefetching ? 'animate-bounce' : ''} />
           </button>
-          <button className={`btn-secondary !px-2 !py-1 ${follow ? 'bg-slate-100' : ''}`} onClick={onToggleFollow} title="Follow vehicle">
+          <button
+            className={`icon-btn ${follow ? '!bg-blue-50 !border-blue-200 !text-blue-700' : ''}`}
+            onClick={onToggleFollow}
+            title="Follow vehicle"
+          >
             <Crosshair size={12} />
           </button>
-          <button className="btn-secondary !px-2 !py-1" onClick={() => setExpanded((e) => !e)} title="Expand map">
+          <button className="icon-btn" onClick={() => setExpanded((e) => !e)} title="Expand map">
             {expanded ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
           </button>
         </>
@@ -292,7 +330,14 @@ export default function NavigationMap({
           </div>
         )}
         <div className={expanded ? 'relative flex-1 min-h-0' : 'relative w-full h-full'}>
-        <MapContainer center={centre} zoom={16} className="h-full w-full" preferCanvas zoomControl>
+        <MapContainer
+          center={centre}
+          zoom={16}
+          className="h-full w-full"
+          preferCanvas
+          zoomControl
+          scrollWheelZoom={expanded}
+        >
           {basemap === 'tiles' ? (
             <TileLayer
               url={api.tileUrl('{z}', '{x}', '{y}')}
@@ -308,6 +353,7 @@ export default function NavigationMap({
             <Graticule centre={centre} />
           )}
           <ScaleControl position="bottomright" imperial={false} />
+          {!expanded && <WheelHint />}
           <MapResize trigger={expanded} />
           <FollowController position={position} follow={follow} />
           <FitOnce boundsKey={route?.length || 0} points={route} />
@@ -473,15 +519,20 @@ export default function NavigationMap({
         </MapContainer>
 
         {/* layer legend */}
-        <div className="absolute bottom-3 left-3 z-[500] bg-white/95 backdrop-blur-sm border border-slate-200 rounded-lg shadow-sm w-[186px] overflow-hidden">
+        <div className="absolute bottom-3 left-3 z-[500] bg-white/[0.97] border border-slate-200/90 rounded-xl shadow-float w-[192px] overflow-hidden">
           <button
             onClick={() => setLegendOpen((o) => !o)}
-            className="w-full flex items-center justify-between px-2 py-1 text-3xs uppercase tracking-wider font-bold text-slate-400 hover:bg-slate-50"
+            className="w-full flex items-center justify-between px-2.5 h-7 text-[9px] uppercase tracking-[0.12em] font-bold text-slate-500 hover:bg-slate-50/80 transition-colors"
           >
-            <span className="flex items-center gap-1">
+            <span className="flex items-center gap-1.5">
               <LayersIcon size={10} /> Layers
             </span>
-            <ChevronDown size={10} className={legendOpen ? '' : '-rotate-90'} />
+            <span className="flex items-center gap-1.5">
+              <span className="font-mono text-[8.5px] font-semibold text-slate-400 normal-case tracking-normal">
+                {Object.values(layers).filter(Boolean).length}/{Object.keys(layers).length}
+              </span>
+              <ChevronDown size={10} className={`transition-transform ${legendOpen ? '' : '-rotate-90'}`} />
+            </span>
           </button>
           {legendOpen && (
             <div className="px-1 pb-1">
@@ -510,21 +561,31 @@ export default function NavigationMap({
 
         {/* live readout */}
         {frame && (
-          <div className="absolute top-3 right-3 z-[500] bg-white/95 backdrop-blur-sm border border-slate-200 rounded-lg shadow-sm px-2.5 py-1.5 font-mono text-2xs text-slate-700 leading-relaxed">
-            <div>
-              <span className="text-slate-400">LAT</span> {frame.truth_lat.toFixed(6)}
+          <div className="absolute top-3 right-3 z-[500] bg-white/[0.97] border border-slate-200/90 rounded-xl shadow-float w-[196px] overflow-hidden">
+            <div className="flex items-center justify-between px-2.5 h-6 border-b border-slate-200/80 bg-slate-50/60">
+              <span className="text-[8.5px] uppercase tracking-[0.12em] font-bold text-slate-500">Live position</span>
+              <span className={`h-1.5 w-1.5 rounded-full ${
+                frame.gnss_status === 'healthy' ? 'bg-emerald-500' : frame.gnss_status === 'unavailable' ? 'bg-slate-400' : 'bg-amber-500'
+              }`} />
             </div>
-            <div>
-              <span className="text-slate-400">LON</span> {frame.truth_lon.toFixed(6)}
+            <div className="px-2.5 py-1.5 font-mono text-[10.5px] text-slate-800 leading-[1.45]">
+              <div className="flex justify-between gap-2">
+                <span className="text-slate-400">LAT</span><span>{frame.truth_lat.toFixed(6)}</span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-slate-400">LON</span><span>{frame.truth_lon.toFixed(6)}</span>
+              </div>
+              <div className="flex justify-between gap-2 pt-1 mt-1 border-t border-slate-100">
+                <span className="text-slate-400">HDG</span><span>{frame.heading_deg.toFixed(0)}°</span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-slate-400">SPD</span><span>{(frame.speed_ms * 3.6).toFixed(0)} km/h</span>
+              </div>
             </div>
-            <div>
-              <span className="text-slate-400">HDG</span> {frame.heading_deg.toFixed(0)}°
-              <span className="text-slate-400 ml-1.5">SPD</span> {(frame.speed_ms * 3.6).toFixed(0)}km/h
-            </div>
-            <div className="pt-0.5 mt-0.5 border-t border-slate-200 flex items-center gap-1">
-              <Route size={9} className="text-teal-600" />
-              <span className="text-slate-500">
-                {mapMatch?.matched ? `on ${String(mapMatch.road).slice(0, 18)}` : 'no road match'}
+            <div className="px-2.5 py-1 border-t border-slate-200/80 bg-teal-50/50 flex items-center gap-1.5">
+              <Route size={9.5} className="text-teal-600 shrink-0" />
+              <span className="text-[9.5px] text-teal-800 truncate">
+                {mapMatch?.matched ? String(mapMatch.road) : 'no road match'}
               </span>
             </div>
           </div>

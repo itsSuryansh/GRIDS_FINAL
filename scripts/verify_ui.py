@@ -56,10 +56,10 @@ async def main():
         ok("map draws trajectory layers", before >= 1, f"{before} canvas layers")
 
         # settings drawer
-        await pg.click("button:has-text('Configure')")
+        await pg.click("button:has-text('System')")
         await pg.wait_for_timeout(1500)
         drawer = await pg.inner_text("aside")
-        ok("system drawer shows map provenance", "Cached tiles" in drawer)
+        ok("system drawer shows map provenance", "Cached tiles" in drawer and "tile.openstreetmap.org" in drawer)
         await pg.click("button[title='Close']")
         await pg.wait_for_timeout(600)
 
@@ -70,7 +70,7 @@ async def main():
         await pg.click("button:has-text('Analytics & sessions')")
         await pg.wait_for_timeout(3500)
         analytics = await pg.inner_text("main")
-        for label in ["Estimator", "RMSE", "RTS smoothed", "Map aiding gain", "Smoothing"]:
+        for label in ["Estimator", "RMSE", "RTS smoothed", "Map aiding gain", "Smoothing gain"]:
             ok(f"analytics shows {label}", label.lower() in analytics.lower())
         ok("stored sessions listed", "SQLite" in analytics)
         ok("ML evaluated honestly", "not enabled" in analytics.lower() or "recommended" in analytics.lower()

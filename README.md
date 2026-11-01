@@ -469,13 +469,31 @@ on the drawn streets — which is what makes map matching meaningful.
 ## 9. Dashboard
 
 Two views, one shell: a mission-control **Operations** view for driving a run and
-an **Analytics & sessions** view for scoring it. Light theme, navy typography, blue
-accents, dense-but-legible data layout, and sticky controls that never scroll away.
+an **Analytics & sessions** view for scoring it.
+
+**Design system.** The UI is built on a small, explicit token set rather than
+ad-hoc classes:
+
+* **Typefaces** — [Inter](https://rsms.me/inter/) (variable) for UI text and
+  JetBrains Mono for every number that changes, so digits stay fixed-width and do
+  not jitter while a run streams. Both are **self-hosted** through `@fontsource`,
+  so the dashboard renders identically with no network access.
+* **Tokens** — a typographic scale (`3xs` → `2xl`), three elevation shadows
+  (`shadow-panel`, `shadow-float`, `shadow-inset`), one cool neutral ramp
+  (`slate`), and a single accent (blue) plus semantic tones (emerald = healthy,
+  amber = degraded, red = rejected).
+* **Components** — `panel` / `panel-header` / `panel-title` for surfaces,
+  `metric-label` + `metric-value` for data, `chip` + `dot` for state, `field-label`
+  for form rows, `icon-btn` / `btn-primary` / `btn-secondary` for actions, and a
+  `tab` segmented pair for switching views. Values that change every frame are
+  monospaced and tabular; labels are small, uppercase and tracked out.
+* Light theme, navy typography, one blue accent, dense-but-legible data layout and
+  sticky controls that never scroll away.
 
 **Operations view**
 
 * **Top bar** — product identity, system / simulation / GNSS / link status pills,
-  mission clock, and a *Configure* button that opens the system drawer.
+  mission clock with progress, and a *System* button that opens the drawer.
 * **Mission control** (left rail) — start / pause / resume / stop / reset with a
   progress bar, then collapsible sections: scenario + fault parameters, vehicle &
   route (including the street-graph `road` pattern, origin, seed, heading), sensor
@@ -488,7 +506,8 @@ accents, dense-but-legible data layout, and sticky controls that never scroll aw
   outage stretches highlighted along the true path; anomaly markers with popups;
   map-match snap point joined to the fused track by an offset line; scale bar,
   follow-vehicle mode, offline-graticule fallback, one-click tile caching and a
-  true full-screen mode.
+  true full-screen mode. Wheel zoom is deliberately disabled in the inline card
+  (a hint says so) so the page still scrolls; the full-screen view enables it.
 * **GNSS integrity** — status, fix validity, residual, NIS, raw error, rejected
   count, per-detector severity bars and the detector's plain-language explanation.
 * **Map matching** — matched road name, offset, gate, aiding state, road source.
@@ -502,7 +521,7 @@ accents, dense-but-legible data layout, and sticky controls that never scroll aw
   shading, plus an integrity event log.
 * **System drawer** — runtime, map-data provenance and cache state, API entry
   points, and the limitations of the current build, stated where an operator will
-  actually read them.
+  actually read them. Dismissed by the X button, the scrim or `Esc`.
 
 **Analytics & sessions view**
 
@@ -598,8 +617,14 @@ python scripts/verify_ui.py         # 19 headless-browser checks, exits non-zero
 ```
 
 It drives the real dashboard: load, start/pause/resume, all five chart tabs, map
-layers, the settings drawer, stop-and-score, the analytics page, loading a stored
+layers, the system drawer, stop-and-score, the analytics page, loading a stored
 session, and a spoofing run — failing on any JavaScript error.
+
+Regenerate the documentation screenshots from the live app (same ports):
+
+```bash
+python scripts/capture_screens.py   # writes docs/images/*.png at 1680x1050
+```
 
 Coverage:
 

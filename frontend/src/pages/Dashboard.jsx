@@ -58,82 +58,162 @@ const DEFAULT_CONFIG = {
 
 /* --------------------------------------------------------------- mini cards */
 
-function Trend({ label, value, sub, tone = 'default', icon: Icon }) {
-  const toneClass =
-    tone === 'good' ? 'text-emerald-700' : tone === 'warn' ? 'text-amber-700' : tone === 'bad' ? 'text-red-700' : 'text-slate-900'
+function Trend({ label, value, unit, sub, tone = 'default', icon: Icon, spark = null }) {
+  const palette = {
+    good: { text: 'text-emerald-700', ring: 'bg-emerald-50 text-emerald-600', edge: 'bg-emerald-500' },
+    warn: { text: 'text-amber-700', ring: 'bg-amber-50 text-amber-600', edge: 'bg-amber-500' },
+    bad: { text: 'text-red-700', ring: 'bg-red-50 text-red-600', edge: 'bg-red-500' },
+    default: { text: 'text-slate-900', ring: 'bg-slate-100 text-slate-500', edge: 'bg-slate-300' },
+  }[tone]
+
   return (
-    <div className="panel px-3 py-2 flex items-center gap-2.5 min-w-0">
-      {Icon ? (
-        <div className="shrink-0 rounded-md bg-slate-100 p-1.5 text-slate-500">
-          <Icon size={13} />
+    <div className="relative overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-panel px-3 py-2 min-w-0">
+      <span className={`absolute left-0 top-0 h-full w-[2.5px] ${palette.edge}`} aria-hidden />
+      <div className="flex items-start gap-2">
+        {Icon ? (
+          <span className={`shrink-0 grid place-items-center h-[26px] w-[26px] rounded-lg ${palette.ring}`}>
+            <Icon size={13} strokeWidth={2.3} />
+          </span>
+        ) : null}
+        <div className="min-w-0 flex-1">
+          <div className="metric-label truncate">{label}</div>
+          <div className="flex items-baseline gap-1">
+            <span className={`font-mono font-semibold text-[19px] leading-[1.15] tracking-[-0.02em] tabular-nums ${palette.text} truncate`}>
+              {value}
+            </span>
+            {unit ? <span className="text-[10px] font-semibold text-slate-400">{unit}</span> : null}
+          </div>
+          {sub ? <div className="text-[9.5px] text-slate-400 truncate leading-tight mt-[1px]">{sub}</div> : null}
         </div>
-      ) : null}
-      <div className="min-w-0">
-        <div className="metric-label truncate">{label}</div>
-        <div className={`metric-value text-[15px] leading-tight ${toneClass} truncate`}>{value}</div>
-        {sub ? <div className="text-3xs text-slate-400 truncate">{sub}</div> : null}
       </div>
+      {spark}
     </div>
+  )
+}
+
+/** Tiny inline sparkline for the KPI strip (no axes, no interaction). */
+function Spark({ values, color = '#2563eb', height = 18 }) {
+  const vals = (values || []).filter((v) => v != null && Number.isFinite(v))
+  if (vals.length < 4) return null
+  const max = Math.max(...vals, 1e-6)
+  const min = Math.min(...vals, 0)
+  const span = Math.max(max - min, 1e-6)
+  const step = 100 / (vals.length - 1)
+  const pts = vals.map((v, i) => `${(i * step).toFixed(2)},${(height - ((v - min) / span) * (height - 2) - 1).toFixed(2)}`)
+  return (
+    <svg viewBox={`0 0 100 ${height}`} preserveAspectRatio="none" className="mt-1 h-[18px] w-full opacity-70">
+      <polyline points={pts.join(' ')} fill="none" stroke={color} strokeWidth="1.4" vectorEffect="non-scaling-stroke" />
+    </svg>
   )
 }
 
 function AnomalyLog({ anomalies }) {
   const list = anomalies.slice().reverse().slice(0, 80)
   return (
-    <div className="panel flex flex-col min-h-0">
-      <div className="panel-header">
-        <div className="flex items-center gap-2">
-          <TriangleAlert size={13} className="text-slate-400" />
-          <h2 className="panel-title">Integrity event log</h2>
+    <section className="panel flex flex-col min-h-0">
+      <header className="panel-header">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="grid place-items-center h-[21px] w-[21px] rounded-md bg-slate-100/90 text-slate-500">
+            <TriangleAlert size={11.5} strokeWidth={2.4} />
+          </span>
+          <div className="min-w-0 leading-none">
+            <h2 className="panel-title truncate">Integrity event log</h2>
+            <p className="text-[9.5px] text-slate-400 truncate mt-[3px] leading-none">detector decisions, newest first</p>
+          </div>
         </div>
-        <span className="text-3xs text-slate-400">{anomalies.length} events</span>
-      </div>
-      <div className="flex-1 overflow-y-auto max-h-[236px] divide-y divide-slate-100">
+        <span className="chip bg-slate-100 text-slate-600 border border-slate-200 font-mono !text-[9px]">
+          {anomalies.length}
+        </span>
+      </header>
+      <div className="flex-1 overflow-y-auto scroll-quiet max-h-[236px]">
         {list.length === 0 ? (
-          <div className="px-3 py-4 text-2xs text-slate-400">
-            No anomalies detected. Try the drift or spoofing scenario to exercise the detector.
+          <div className="px-3 py-6 text-center">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 mb-1.5">
+              <TriangleAlert size={13} />
+            </span>
+            <div className="text-[11px] font-medium text-slate-600">No integrity events</div>
+            <div className="text-[9.5px] text-slate-400 mt-0.5">
+              Try the drift or spoofing scenario to exercise the detector.
+            </div>
           </div>
         ) : (
           list.map((a, i) => (
-            <div key={`${a.t}-${i}`} className="px-3 py-1.5 hover:bg-slate-50">
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-mono text-2xs text-slate-800">
-                  t={a.t.toFixed(1)}s · {a.anomaly_type}
+            <div key={`${a.t}-${i}`} className="px-3 py-[6px] border-b border-slate-100/80 last:border-0 hover:bg-slate-50/70 transition-colors">
+              <div className="flex items-center gap-1.5">
+                <span className={`h-[5px] w-[5px] rounded-full shrink-0 ${a.rejected ? 'bg-red-500' : 'bg-amber-400'}`} />
+                <span className="font-mono text-[10px] text-slate-700 tabular-nums">
+                  {a.t.toFixed(1)}<span className="text-slate-400">s</span>
                 </span>
-                <span className={`chip ${a.rejected ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
-                  {a.rejected ? 'rejected' : 'down-weighted'}
+                <span className="text-[10px] font-semibold text-slate-800 truncate">{a.anomaly_type}</span>
+                <span className={`ml-auto chip !text-[8px] !px-1 !py-0 !rounded border ${
+                  a.rejected
+                    ? 'bg-red-50 text-red-700 border-red-200'
+                    : 'bg-amber-50 text-amber-700 border-amber-200'
+                }`}>
+                  {a.rejected ? 'rejected' : 'weighted'}
                 </span>
               </div>
-              <div className="text-3xs text-slate-500 leading-snug">{a.reason}</div>
+              <div className="text-[9.5px] text-slate-500 leading-snug pl-[11px] mt-[1px]">{a.reason}</div>
             </div>
           ))
         )}
       </div>
-    </div>
+    </section>
   )
 }
 
 function MapMatchCard({ frame, mapInfo }) {
   const mm = frame?.map_match
+  const aiding = frame?.modules?.map_aiding || 'off'
+  const aidingTone =
+    aiding === 'active' ? 'bg-teal-50 text-teal-700 border-teal-200'
+      : aiding.startsWith('gated') ? 'bg-amber-50 text-amber-700 border-amber-200'
+        : 'bg-slate-100 text-slate-500 border-slate-200'
+  const source = mapInfo?.source === 'osm' ? 'OpenStreetMap'
+    : mapInfo?.source === 'synthetic' ? 'synthetic network'
+      : mapInfo?.source || '—'
+
   return (
-    <div className="panel flex flex-col">
-      <div className="panel-header">
-        <div className="flex items-center gap-2">
-          <RouteIcon size={13} className="text-slate-400" />
-          <h2 className="panel-title">Map matching</h2>
+    <section className="panel">
+      <span className="absolute left-0 top-0 h-full w-[2px] bg-teal-500/70" aria-hidden />
+      <header className="panel-header">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="grid place-items-center h-[21px] w-[21px] rounded-md bg-slate-100/90 text-slate-500">
+            <RouteIcon size={11.5} strokeWidth={2.4} />
+          </span>
+          <div className="min-w-0 leading-none">
+            <h2 className="panel-title truncate">Map matching</h2>
+            <p className="text-[9.5px] text-slate-400 truncate mt-[3px] leading-none">snap · corridor · source</p>
+          </div>
         </div>
         <span className={`chip ${mm?.matched ? 'bg-teal-50 text-teal-700 border border-teal-200' : 'bg-slate-100 text-slate-500 border border-slate-200'}`}>
+          <span className={`h-[5px] w-[5px] rounded-full ${mm?.matched ? 'bg-teal-500' : 'bg-slate-400'}`} />
           {mm?.matched ? 'locked' : 'searching'}
         </span>
+      </header>
+      <div className="px-3 py-2">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-[11px] text-slate-500 truncate">{mm?.road || 'no road matched'}</span>
+          <span className="font-mono text-[13px] font-semibold text-slate-900 tabular-nums shrink-0">
+            {fixed(mm?.offset_m, 2)}<span className="text-[9px] text-slate-400 ml-0.5">m</span>
+          </span>
+        </div>
+        <div className="mt-1.5 grid grid-cols-3 gap-2">
+          <div>
+            <div className="metric-label">Gate</div>
+            <div className="font-mono text-[10.5px] text-slate-700">40 m</div>
+          </div>
+          <div>
+            <div className="metric-label">Aiding</div>
+            <span className={`chip border !px-1 !py-0 !text-[8.5px] ${aidingTone}`}>{aiding}</span>
+          </div>
+          <div className="min-w-0">
+            <div className="metric-label">Source</div>
+            <div className="text-[10.5px] text-slate-700 truncate">{source}</div>
+          </div>
+        </div>
       </div>
-      <div className="p-3 text-xs space-y-1">
-        <div className="flex justify-between"><span className="metric-label">Road</span><span className="font-medium text-slate-800 truncate max-w-[150px]">{mm?.road || '—'}</span></div>
-        <div className="flex justify-between"><span className="metric-label">Offset</span><span className="font-mono">{fixed(mm?.offset_m, 2)} m</span></div>
-        <div className="flex justify-between"><span className="metric-label">Snap gate</span><span className="font-mono">40 m</span></div>
-        <div className="flex justify-between"><span className="metric-label">Cross-track aid</span><span className="font-medium">{frame?.modules?.map_aiding || 'off'}</span></div>
-        <div className="flex justify-between"><span className="metric-label">Road source</span><span className="font-medium">{mapInfo?.source === 'osm' ? 'OpenStreetMap' : mapInfo?.source === 'synthetic' ? 'synthetic' : mapInfo?.source || '—'}</span></div>
-      </div>
-    </div>
+    </section>
   )
 }
 
@@ -302,46 +382,56 @@ export default function Dashboard() {
     return mm ? { ...mm } : null
   }, [frame?.map_match])
 
+  const errSeries = useMemo(() => trail.slice(-90).map((f) => f.ekf_error_m), [trail])
+  const sigmaSeries = useMemo(() => trail.slice(-90).map((f) => f.position_sigma_m), [trail])
+
   const kpis = [
     {
-      label: 'Position error (EKF)',
-      value: frame ? `${fixed(frame.ekf_error_m, 2)} m` : '—',
-      sub: frame ? `DR ${fixed(frame.dr_error_m, 1)} m · RTS ${fixed(frame.sm_error_m, 1)} m` : 'awaiting run',
+      label: 'Position error · EKF',
+      value: fixed(frame?.ekf_error_m, 2),
+      unit: 'm',
+      sub: frame ? `DR ${fixed(frame.dr_error_m, 1)} · RTS ${fixed(frame.sm_error_m, 1)} m` : 'awaiting run',
       tone: frame ? (frame.ekf_error_m > 15 ? 'bad' : frame.ekf_error_m > 5 ? 'warn' : 'good') : 'default',
       icon: Crosshair,
+      spark: <Spark values={errSeries} color="#2563eb" />,
     },
     {
       label: 'GNSS availability',
-      value: `${fixed(summary?.gnss_availability_pct, 1)}%`,
-      sub: frame ? `residual ${fixed(frame.gnss_residual_m, 1)} m · rejected ${frame.rejected_count ?? 0}` : '',
+      value: fixed(summary?.gnss_availability_pct, 1),
+      unit: '%',
+      sub: frame ? `residual ${fixed(frame.gnss_residual_m, 1)} m · ${frame.rejected_count ?? 0} rejected` : '',
       tone: frame?.gnss_available ? 'good' : 'warn',
       icon: Radio,
     },
     {
       label: 'Integrity events',
-      value: `${summary?.anomalies ?? 0}`,
+      value: summary?.anomalies ?? 0,
+      unit: '',
       sub: frame?.anomaly ? frame.anomaly_type : 'no active anomaly',
       tone: frame?.anomaly ? 'bad' : 'default',
       icon: TriangleAlert,
     },
     {
       label: 'Map match offset',
-      value: mapMatch?.matched ? `${fixed(mapMatch.offset_m, 1)} m` : '—',
-      sub: mapMatch?.road ? String(mapMatch.road).slice(0, 26) : 'no road matched',
-      tone: 'default',
+      value: mapMatch?.matched ? fixed(mapMatch.offset_m, 1) : '—',
+      unit: mapMatch?.matched ? 'm' : '',
+      sub: mapMatch?.road ? String(mapMatch.road).slice(0, 28) : 'no road matched',
+      tone: mapMatch?.matched ? 'default' : 'default',
       icon: RouteIcon,
     },
     {
       label: 'EKF σ position',
-      value: `${fixed(frame?.position_sigma_m, 2)} m`,
+      value: fixed(frame?.position_sigma_m, 2),
+      unit: 'm',
       sub: `√tr(P) ${fixed(frame?.uncertainty_m, 2)} m`,
       tone: frame?.position_sigma_m > 20 ? 'warn' : 'default',
       icon: Gauge,
+      spark: <Spark values={sigmaSeries} color="#7c3aed" />,
     },
   ]
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-slate-50">
+    <div className="h-screen flex flex-col overflow-hidden bg-[#f4f6fa]">
       <TopBar
         status={status}
         frame={frame}
@@ -388,12 +478,12 @@ export default function Dashboard() {
         )}
 
         <main className="flex-1 min-w-0 flex flex-col">
-          <div className="h-10 shrink-0 border-b border-slate-200 bg-white flex items-center px-2 gap-1">
+          <div className="h-11 shrink-0 border-b border-slate-200/90 bg-white/80 backdrop-blur-sm flex items-center px-2 gap-1">
             <button onClick={() => setTab('dashboard')} className={`tab flex items-center gap-1.5 ${tab === 'dashboard' ? 'tab-active' : ''}`}>
-              <LayoutDashboard size={12} /> Operations
+              <LayoutDashboard size={12.5} strokeWidth={2.3} /> Operations
             </button>
             <button onClick={() => setTab('analytics')} className={`tab flex items-center gap-1.5 ${tab === 'analytics' ? 'tab-active' : ''}`}>
-              <BarChart3 size={12} /> Analytics & sessions
+              <BarChart3 size={12.5} strokeWidth={2.3} /> Analytics & sessions
             </button>
             <div className="ml-auto flex items-center gap-3 pr-1 text-2xs text-slate-500">
               {frame?.modules?.gnss ? (
@@ -409,12 +499,12 @@ export default function Dashboard() {
           </div>
 
           {tab === 'dashboard' ? (
-            <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
+            <div className="flex-1 min-h-0 overflow-y-auto scroll-quiet p-3 space-y-3">
               <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
                 {kpis.map((k) => (<Trend key={k.label} {...k} />))}
               </div>
 
-              <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 xl:h-[600px]">
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 xl:h-[620px]">
                 <div className="xl:col-span-2 h-[420px] xl:h-full">
                   <NavigationMap
                     frame={frame}
@@ -427,10 +517,10 @@ export default function Dashboard() {
                     onToggleFollow={() => setFollow((f) => !f)}
                   />
                 </div>
-                <div className="flex flex-col gap-3 min-h-0 xl:overflow-y-auto xl:pr-0.5">
-                  <GnssStatusPanel frame={frame} summary={summary} anomalies={anomalies} />
-                  <MapMatchCard frame={frame} mapInfo={mapInfo} />
-                  <AlgorithmPanel frame={frame} mlEnabled={config.enable_ml_correction} />
+                <div className="flex flex-col gap-3 min-h-0 xl:overflow-y-auto scroll-quiet xl:pr-0.5">
+                  <div className="shrink-0"><GnssStatusPanel frame={frame} summary={summary} anomalies={anomalies} /></div>
+                  <div className="shrink-0"><MapMatchCard frame={frame} mapInfo={mapInfo} /></div>
+                  <div className="shrink-0"><AlgorithmPanel frame={frame} mlEnabled={config.enable_ml_correction} /></div>
                 </div>
               </div>
 

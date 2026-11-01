@@ -12,13 +12,13 @@ import { COLORS, ALGO_META, fixed } from '../utils/format'
 
 function Stat({ label, value, unit, tone = '', hint }) {
   return (
-    <div className="px-3 py-2 border-r border-b border-slate-200/70">
+    <div className="px-3.5 py-2.5 border-r border-b border-slate-200/70">
       <div className="metric-label">{label}</div>
-      <div className={`metric-value text-[13px] ${tone}`}>
+      <div className={`metric-value text-[15px] mt-[3px] ${tone}`}>
         {value}
-        {unit ? <span className="text-3xs text-slate-400 ml-1 font-sans">{unit}</span> : null}
+        {unit ? <span className="text-[10px] text-slate-400 ml-1 font-sans">{unit}</span> : null}
       </div>
-      {hint ? <div className="text-3xs text-slate-400">{hint}</div> : null}
+      {hint ? <div className="text-[10px] text-slate-400 mt-[2px] leading-snug">{hint}</div> : null}
     </div>
   )
 }
@@ -35,14 +35,14 @@ function MetricsTable({ report, best }) {
     <div className="overflow-x-auto">
       <table className="w-full text-xs">
         <thead>
-          <tr className="text-3xs uppercase tracking-wider text-slate-400 border-b border-slate-200 bg-slate-50/60">
-            <th className="text-left font-semibold px-3 py-1.5">Estimator</th>
-            <th className="text-right font-semibold px-2 py-1.5">RMSE</th>
-            <th className="text-right font-semibold px-2 py-1.5">MAE</th>
-            <th className="text-right font-semibold px-2 py-1.5">Mean</th>
-            <th className="text-right font-semibold px-2 py-1.5">P95</th>
-            <th className="text-right font-semibold px-2 py-1.5">Max</th>
-            <th className="text-right font-semibold px-3 py-1.5">Samples</th>
+          <tr className="text-[9px] uppercase tracking-[0.1em] text-slate-400 border-b border-slate-200 bg-slate-50/80">
+            <th className="text-left font-semibold px-3 py-2">Estimator</th>
+            <th className="text-right font-semibold px-2 py-2">RMSE</th>
+            <th className="text-right font-semibold px-2 py-2">MAE</th>
+            <th className="text-right font-semibold px-2 py-2">Mean</th>
+            <th className="text-right font-semibold px-2 py-2">P95</th>
+            <th className="text-right font-semibold px-2 py-2">Max</th>
+            <th className="text-right font-semibold px-3 py-2">Samples</th>
           </tr>
         </thead>
         <tbody>
@@ -51,21 +51,21 @@ function MetricsTable({ report, best }) {
             const meta = ALGO_META[a] || { label: a, color: COLORS.grid }
             const off = m.samples === 0
             return (
-              <tr key={a} className={`border-b border-slate-100 ${off ? 'opacity-45' : ''} ${a === best ? 'bg-emerald-50/40' : ''}`}>
-                <td className="px-3 py-1.5">
+              <tr key={a} className={`border-b border-slate-100 last:border-0 transition-colors hover:bg-slate-50/70 ${off ? 'opacity-45' : ''} ${a === best ? 'bg-emerald-50/50' : ''}`}>
+                <td className="px-3 py-2">
                   <span className="inline-flex items-center gap-1.5">
-                    <span className="inline-block h-2 w-2 rounded-sm" style={{ background: meta.color }} />
+                    <span className="inline-block h-[7px] w-[7px] rounded-[2px] ring-1 ring-inset ring-black/5" style={{ background: meta.color }} />
                     <span className={`${a === best ? 'font-semibold text-slate-900' : 'font-medium text-slate-700'}`}>{meta.label}</span>
                     {a === best ? <span className="chip bg-emerald-100 text-emerald-800 border border-emerald-200">best</span> : null}
                     {off ? <span className="chip bg-slate-100 text-slate-500 border border-slate-200">n/a</span> : null}
                   </span>
                 </td>
-                <td className="px-2 py-1.5 text-right font-mono tabular-nums">{fixed(m.rmse_m, 2)}</td>
-                <td className="px-2 py-1.5 text-right font-mono tabular-nums">{fixed(m.mae_m, 2)}</td>
-                <td className="px-2 py-1.5 text-right font-mono tabular-nums">{fixed(m.mean_m, 2)}</td>
-                <td className="px-2 py-1.5 text-right font-mono tabular-nums">{fixed(m.p95_m, 2)}</td>
-                <td className="px-2 py-1.5 text-right font-mono tabular-nums">{fixed(m.max_m, 2)}</td>
-                <td className="px-3 py-1.5 text-right font-mono tabular-nums text-slate-500">{m.samples}</td>
+                <td className="px-2 py-2 text-right font-mono tabular-nums font-semibold text-slate-900">{fixed(m.rmse_m, 2)}</td>
+                <td className="px-2 py-2 text-right font-mono tabular-nums">{fixed(m.mae_m, 2)}</td>
+                <td className="px-2 py-2 text-right font-mono tabular-nums">{fixed(m.mean_m, 2)}</td>
+                <td className="px-2 py-2 text-right font-mono tabular-nums">{fixed(m.p95_m, 2)}</td>
+                <td className="px-2 py-2 text-right font-mono tabular-nums">{fixed(m.max_m, 2)}</td>
+                <td className="px-3 py-2 text-right font-mono tabular-nums text-slate-500">{m.samples}</td>
               </tr>
             )
           })}
@@ -165,10 +165,10 @@ export default function AnalyticsPage({ liveReport }) {
     <div className="p-3 space-y-3 overflow-y-auto h-full">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-sm font-bold text-slate-900">Performance analytics</h1>
-          <p className="text-2xs text-slate-500">
-            Six estimators, identical timestamps, one simulated ground-truth reference.{' '}
-            {report ? <span className="font-mono text-slate-600">source: {source}</span> : null}
+          <h1 className="text-[17px] font-bold tracking-[-0.01em] text-slate-900">Performance analytics</h1>
+          <p className="text-[11px] text-slate-500 leading-snug">
+            Six estimators scored at identical timestamps against one simulated ground-truth reference
+            {report ? <span className="font-mono text-[10px] text-slate-400 ml-1">· source: {source}</span> : null}
           </p>
         </div>
         <button className="btn-secondary" onClick={load} disabled={loading}>
@@ -213,16 +213,16 @@ export default function AnalyticsPage({ liveReport }) {
               <div className="panel-header"><h2 className="panel-title">RMSE vs P95 by estimator</h2></div>
               <div className="h-[248px] p-2">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={barData} margin={{ top: 6, right: 8, left: -18, bottom: 0 }}>
-                    <CartesianGrid stroke={COLORS.grid} strokeDasharray="2 3" />
-                    <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#64748b' }} tickLine={false} />
-                    <YAxis tick={{ fontSize: 9, fill: '#64748b' }} tickLine={false} axisLine={false} width={46} unit="m" />
-                    <Tooltip formatter={(v) => `${Number(v).toFixed(2)} m`} contentStyle={{ fontSize: 11, borderRadius: 6, borderColor: '#cbd5e1' }} />
-                    <Legend wrapperStyle={{ fontSize: 10 }} />
+                  <BarChart data={barData} margin={{ top: 6, right: 10, left: 0, bottom: 2 }}>
+                    <CartesianGrid stroke="rgba(148,163,184,0.22)" strokeDasharray="2 4" vertical={false} />
+                    <XAxis dataKey="name" tick={{ fontSize: 9.5, fill: '#64748b', fontFamily: 'JetBrains Mono Variable, monospace' }} tickLine={false} tickMargin={4} axisLine={{ stroke: 'rgba(148,163,184,0.35)' }} />
+                    <YAxis tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: 'JetBrains Mono Variable, monospace' }} tickLine={false} axisLine={false} width={44} tickMargin={4} unit="m" />
+                    <Tooltip formatter={(v) => `${Number(v).toFixed(2)} m`} contentStyle={{ fontSize: 11, borderRadius: 8, borderColor: '#e2e8f0', boxShadow: '0 10px 30px -12px rgba(15,23,42,0.28)' }} />
+                    <Legend wrapperStyle={{ fontSize: 10, paddingTop: 4 }} iconSize={8} iconType="plainline" />
                     <Bar dataKey="rmse" name="RMSE" radius={[3, 3, 0, 0]}>
                       {barData.map((b) => (<Cell key={b.key} fill={ALGO_META[b.key]?.color || '#94a3b8'} />))}
                     </Bar>
-                    <Bar dataKey="p95" name="P95" fill="#cbd5e1" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="p95" name="P95" fill="#e2e8f0" radius={[3, 3, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -233,12 +233,12 @@ export default function AnalyticsPage({ liveReport }) {
               <div className="h-[248px] p-2">
                 {report.series?.length ? (
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={report.series} margin={{ top: 6, right: 10, left: -18, bottom: 0 }}>
-                      <CartesianGrid stroke={COLORS.grid} strokeDasharray="2 3" />
-                      <XAxis dataKey="t" tick={{ fontSize: 9, fill: '#64748b' }} tickLine={false} unit="s" minTickGap={30} />
-                      <YAxis tick={{ fontSize: 9, fill: '#64748b' }} tickLine={false} axisLine={false} width={46} unit="m" />
-                      <Tooltip contentStyle={{ fontSize: 11, borderRadius: 6, borderColor: '#cbd5e1' }} />
-                      <Legend wrapperStyle={{ fontSize: 10 }} />
+                    <LineChart data={report.series} margin={{ top: 6, right: 14, left: 0, bottom: 2 }}>
+                      <CartesianGrid stroke="rgba(148,163,184,0.22)" strokeDasharray="2 4" vertical={false} />
+                      <XAxis dataKey="t" tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: 'JetBrains Mono Variable, monospace' }} tickLine={false} tickMargin={4} unit="s" minTickGap={34} axisLine={{ stroke: 'rgba(148,163,184,0.35)' }} />
+                      <YAxis tick={{ fontSize: 9, fill: '#94a3b8', fontFamily: 'JetBrains Mono Variable, monospace' }} tickLine={false} axisLine={false} width={44} tickMargin={4} unit="m" />
+                      <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, borderColor: '#e2e8f0', boxShadow: '0 10px 30px -12px rgba(15,23,42,0.28)' }} />
+                      <Legend wrapperStyle={{ fontSize: 10, paddingTop: 4 }} iconSize={8} iconType="plainline" />
                       <Line type="monotone" dataKey="ekf_error_m" name="EKF" stroke={COLORS.ekf} dot={false} strokeWidth={1.7} isAnimationActive={false} />
                       <Line type="monotone" dataKey="sm_error_m" name="RTS" stroke={COLORS.smoothed} dot={false} strokeWidth={1.3} isAnimationActive={false} connectNulls />
                       <Line type="monotone" dataKey="dr_error_m" name="DR" stroke={COLORS.dr} dot={false} strokeWidth={1.1} isAnimationActive={false} />
@@ -270,8 +270,12 @@ export default function AnalyticsPage({ liveReport }) {
                 ) : (
                   <p className="text-slate-500">No GNSS outage in this run, so recovery metrics do not apply.</p>
                 )}
-                <ul className="mt-3 space-y-1 text-2xs text-slate-500 list-disc list-inside">
-                  {(report.notes || []).map((n, i) => (<li key={i}>{n}</li>))}
+                <ul className="mt-3 space-y-1.5 text-[10.5px] text-slate-500 leading-[1.5]">
+                  {(report.notes || []).map((n, i) => (
+                    <li key={i} className="relative pl-2.5 before:absolute before:left-0 before:top-[5px] before:h-[3px] before:w-[3px] before:rounded-full before:bg-slate-300">
+                      {n}
+                    </li>
+                  ))}
                 </ul>
               </div>
             </div>
@@ -287,14 +291,26 @@ export default function AnalyticsPage({ liveReport }) {
                 </div>
                 {ml?.evaluation?.baseline_ekf ? (
                   <>
-                    <div className="font-mono text-2xs">
-                      baseline EKF RMSE {fixed(ml.evaluation.baseline_ekf.rmse_m, 2)} m
-                      <br />
-                      with correction {fixed(ml.evaluation.corrected.rmse_m, 2)} m
-                      <br />
-                      Δ {fixed(ml.evaluation.rmse_improvement_m, 2)} m
+                    <div className="mt-1 rounded-md border border-slate-200 overflow-hidden">
+                      {[
+                        ['Baseline EKF RMSE', fixed(ml.evaluation.baseline_ekf.rmse_m, 2), ''],
+                        ['With ML correction', fixed(ml.evaluation.corrected.rmse_m, 2), ''],
+                        [
+                          'Difference',
+                          fixed(ml.evaluation.rmse_improvement_m, 2),
+                          ml.evaluation.rmse_improvement_m > 0 ? 'text-emerald-700' : 'text-red-700',
+                        ],
+                      ].map(([label, val, tone]) => (
+                        <div
+                          key={label}
+                          className="flex items-baseline justify-between gap-3 px-2 py-[5px] border-b border-slate-100 last:border-0 bg-slate-50/50"
+                        >
+                          <span className="text-[10px] text-slate-500">{label}</span>
+                          <span className={`text-[11px] font-mono tabular-nums ${tone || 'text-slate-800'}`}>{val} m</span>
+                        </div>
+                      ))}
                     </div>
-                    <p className="text-2xs text-slate-500">
+                    <p className="text-[10px] text-slate-500 leading-[1.5]">
                       Held-out: {ml.evaluation.test_samples} samples / {ml.evaluation.test_sessions} unseen
                       sessions.{' '}
                       {ml.evaluation.recommended_default
@@ -303,9 +319,9 @@ export default function AnalyticsPage({ liveReport }) {
                     </p>
                   </>
                 ) : (
-                  <p className="text-2xs text-slate-500">
-                    Train with <code className="font-mono">python -m app.ml.train</code> to produce a
-                    measured comparison on held-out simulated sessions.
+                  <p className="text-[10.5px] text-slate-500 leading-[1.5]">
+                    Train with <code className="font-mono bg-slate-100 rounded px-1 py-0.5 text-[10px]">python -m app.ml.train</code>{' '}
+                    to produce a measured comparison on held-out simulated sessions.
                   </p>
                 )}
               </div>
@@ -317,7 +333,7 @@ export default function AnalyticsPage({ liveReport }) {
       <div className="panel">
         <div className="panel-header">
           <div className="flex items-center gap-2"><Database size={14} className="text-slate-400" /><h2 className="panel-title">Stored sessions</h2></div>
-          <span className="text-3xs text-slate-400">{sessions.length} in SQLite</span>
+          <span className="text-[9.5px] font-mono tabular-nums text-slate-400">{sessions.length} in SQLite</span>
         </div>
         {sessions.length === 0 ? (
           <div className="px-3 py-4 text-xs text-slate-500">No sessions stored yet. Start and stop a simulation to archive one.</div>
@@ -325,37 +341,43 @@ export default function AnalyticsPage({ liveReport }) {
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="text-3xs uppercase tracking-wider text-slate-400 border-b border-slate-200 bg-slate-50/60">
-                  <th className="text-left px-3 py-1.5 font-semibold">#</th>
-                  <th className="text-left px-2 py-1.5 font-semibold">Scenario</th>
-                  <th className="text-left px-2 py-1.5 font-semibold">Route</th>
-                  <th className="text-right px-2 py-1.5 font-semibold">Duration</th>
-                  <th className="text-right px-2 py-1.5 font-semibold">EKF</th>
-                  <th className="text-right px-2 py-1.5 font-semibold">RTS</th>
-                  <th className="text-right px-2 py-1.5 font-semibold">DR</th>
-                  <th className="text-right px-2 py-1.5 font-semibold">GNSS</th>
-                  <th className="text-left px-3 py-1.5 font-semibold">Status</th>
+                <tr className="text-[9px] uppercase tracking-[0.1em] text-slate-400 border-b border-slate-200 bg-slate-50/80">
+                  <th className="text-left px-3 py-2 font-semibold">#</th>
+                  <th className="text-left px-2 py-2 font-semibold">Scenario</th>
+                  <th className="text-left px-2 py-2 font-semibold">Route</th>
+                  <th className="text-right px-2 py-2 font-semibold">Duration</th>
+                  <th className="text-right px-2 py-2 font-semibold">EKF</th>
+                  <th className="text-right px-2 py-2 font-semibold">RTS</th>
+                  <th className="text-right px-2 py-2 font-semibold">DR</th>
+                  <th className="text-right px-2 py-2 font-semibold">GNSS</th>
+                  <th className="text-left px-3 py-2 font-semibold">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {sessions.map((s) => (
-                  <tr key={s.id} onClick={() => openSession(s.id)} className="border-b border-slate-100 hover:bg-blue-50/50 cursor-pointer" title="Open this session's report">
-                    <td className="px-3 py-1.5 font-mono text-slate-500">{s.id}</td>
-                    <td className="px-2 py-1.5 font-medium text-slate-800">{s.scenario}</td>
-                    <td className="px-2 py-1.5 text-slate-600">{s.route_pattern}</td>
-                    <td className="px-2 py-1.5 text-right font-mono">{fixed(s.duration_s, 1)} s</td>
-                    <td className="px-2 py-1.5 text-right font-mono text-blue-800">{fixed(s.metrics?.ekf?.rmse_m, 2)}</td>
-                    <td className="px-2 py-1.5 text-right font-mono text-teal-700">{fixed(s.metrics?.rts_smoothed?.rmse_m, 2)}</td>
-                    <td className="px-2 py-1.5 text-right font-mono">{fixed(s.metrics?.dead_reckoning?.rmse_m, 2)}</td>
-                    <td className="px-2 py-1.5 text-right font-mono">{fixed(s.metrics?.gnss?.rmse_m, 2)}</td>
-                    <td className="px-3 py-1.5"><span className="chip bg-slate-50 text-slate-600 border border-slate-200">{s.status}</span></td>
+                  <tr key={s.id} onClick={() => openSession(s.id)} className="border-b border-slate-100 last:border-0 hover:bg-blue-50/50 cursor-pointer transition-colors" title="Open this session's report">
+                    <td className="px-3 py-2 font-mono text-slate-400">{s.id}</td>
+                    <td className="px-2 py-2 font-medium text-slate-800">{s.scenario}</td>
+                    <td className="px-2 py-2 text-slate-600">{s.route_pattern}</td>
+                    <td className="px-2 py-2 text-right font-mono">{fixed(s.duration_s, 1)} s</td>
+                    <td className="px-2 py-2 text-right font-mono text-blue-800">{fixed(s.metrics?.ekf?.rmse_m, 2)}</td>
+                    <td className="px-2 py-2 text-right font-mono text-teal-700">{fixed(s.metrics?.rts_smoothed?.rmse_m, 2)}</td>
+                    <td className="px-2 py-2 text-right font-mono">{fixed(s.metrics?.dead_reckoning?.rmse_m, 2)}</td>
+                    <td className="px-2 py-2 text-right font-mono">{fixed(s.metrics?.gnss?.rmse_m, 2)}</td>
+                    <td className="px-3 py-2">
+                      <span className={`chip border ${
+                        s.status === 'completed'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-slate-50 text-slate-600 border-slate-200'
+                      }`}>{s.status}</span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         )}
-        <div className="px-3 py-1.5 text-3xs text-slate-400 border-t border-slate-200 flex items-center gap-1">
+        <div className="px-3 py-2 text-[9.5px] text-slate-400 border-t border-slate-200 flex items-center gap-1.5">
           <History size={10} /> High-frequency frames are batched before being written, so storage stays compact.
         </div>
       </div>
