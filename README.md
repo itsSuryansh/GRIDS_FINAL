@@ -15,6 +15,12 @@ style dashboard, and ground-truth-scored performance analytics persisted in SQLi
 > anti-spoofing system. These limits are stated in the API (`/api/system/info`),
 > in the analytics notes of every report, and in the UI.
 
+![GRIDS operations dashboard](docs/images/dashboard-operations.png)
+
+*Operations view during a run: live GNSS/DR/EKF tracks on the offline basemap,
+GNSS channel diagnostics, per-module health, system metrics and live analytics.
+All values come from the backend in real time.*
+
 ---
 
 ## 1. Problem statement
@@ -389,6 +395,11 @@ density:
   bar chart, per-timestamp error curves, outage-recovery panel, ML evaluation
   panel, stored-session archive with click-through reports.
 
+![GRIDS analytics view](docs/images/dashboard-analytics.png)
+
+*Analytics view: per-estimator RMSE/MAE/P95/max at identical timestamps, outage
+recovery figures, the measured ML evaluation, and the stored-session archive.*
+
 ---
 
 ## 10. Local development
@@ -531,5 +542,6 @@ grids/
 │   │   ├── pages/Dashboard.jsx  services/api.js  utils/format.js
 │   ├── Dockerfile  nginx.conf  vite.config.js  tailwind.config.js
 ├── scripts/run_scenarios.py
+├── docs/{ARCHITECTURE.md,images/}
 ├── docker-compose.yml  .env.example  README.md
 ```
