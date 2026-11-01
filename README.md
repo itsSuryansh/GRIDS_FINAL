@@ -591,6 +591,16 @@ python -m pytest -q                 # 103 tests, ~25 s
 python -m pytest tests/test_api.py -q -v
 ```
 
+End-to-end UI check (needs the backend on :8000 and the dev server on :5173):
+
+```bash
+python scripts/verify_ui.py         # 19 headless-browser checks, exits non-zero on failure
+```
+
+It drives the real dashboard: load, start/pause/resume, all five chart tabs, map
+layers, the settings drawer, stop-and-score, the analytics page, loading a stored
+session, and a spoofing run — failing on any JavaScript error.
+
 Coverage:
 
 | File | Focus |
@@ -678,7 +688,7 @@ grids/
 │   │   ├── hooks/useSimulationSocket.js
 │   │   ├── pages/Dashboard.jsx  services/api.js  utils/format.js
 │   ├── Dockerfile  nginx.conf  vite.config.js  tailwind.config.js
-├── scripts/run_scenarios.py
+├── scripts/{run_scenarios.py,verify_ui.py}
 ├── docs/{ARCHITECTURE.md,images/}
 ├── docker-compose.yml  .env.example  README.md
 ```
