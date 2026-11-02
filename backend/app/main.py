@@ -73,7 +73,9 @@ _INDEX = _DIST / "index.html"
 def dashboard() -> FileResponse:
     """Serve the built single-page app (falls back to a hint if not built)."""
     if _INDEX.is_file():
-        return FileResponse(_INDEX)
+        # assets are content-hashed, the shell is not: never cache the shell so a
+        # rebuild is picked up on the next reload
+        return FileResponse(_INDEX, headers={"Cache-Control": "no-cache"})
     return JSONResponse(
         status_code=404,
         content={

@@ -594,7 +594,9 @@ basemap before the run starts; controls, KPIs and diagnostics are all live.*
 
 ## 10. Deployment
 
-See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** for the full guide: running
+See **[docs/RUN_AND_DEPLOY.md](docs/RUN_AND_DEPLOY.md)** for the step-by-step
+recipe (local from scratch → Vercel) and **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**
+for the details: running
 locally (dev server or a single port), publishing the dashboard on Vercel, and
 putting the stateful API on a host that keeps a process, a WebSocket and a disk
 alive. Short version:
@@ -608,6 +610,13 @@ alive. Short version:
 ---
 
 ## 11. Local development
+
+**Fastest path:** `./scripts/dev.sh` (creates the venv, installs deps, starts the
+API on :8000 and the dashboard on :5173). `./scripts/dev.sh --prod` builds once and
+serves everything on :8000. `python3 scripts/preflight.py` checks the machine
+before you start. Step-by-step instructions, a first-run walkthrough, a
+troubleshooting table and the deployment recipe live in
+**[docs/RUN_AND_DEPLOY.md](docs/RUN_AND_DEPLOY.md)**.
 
 Requirements: Python 3.11+, Node 18+.
 

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+import warnings
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
@@ -100,7 +101,13 @@ class MlCorrectionModel:
     def _load(self) -> None:
         try:
             if os.path.exists(self.path):
-                bundle = joblib.load(self.path)
+                # The artifact was pickled with whatever scikit-learn version
+                # trained it; importing it under a different one is fine but
+                # emits a scary warning. Keep the log clean -- correctness is
+                # unaffected because the layer ships disabled by default.
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    bundle = joblib.load(self.path)
                 self.model = bundle.get("model")
                 self.report = bundle.get("report", {})
                 self.loaded = self.model is not None

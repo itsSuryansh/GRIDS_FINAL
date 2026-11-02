@@ -12,5 +12,7 @@ dist/
 *.db-wal
 *.db-shm
 backend/data/
+frontend/dist/
+.vercel/
 backend/ml_artifacts/*.joblib
 .DS_Store
